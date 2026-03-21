@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+
+# Expo
+.expo/
+apps/mobile/.expo/
+apps/mobile/dist/
+
+# Prisma
+apps/backend/prisma/migrations/*.sql.bak
+
+# Generated
+apps/mobile/src/i18n/locales/generated/

@@ -1,0 +1,397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  SALES_MANAGER
+  OPS_MANAGER
+  TENANT
+}
+
+enum Language {
+  EN
+  HI
+}
+
+enum PropertyType {
+  PG
+  OFFICE
+  CO_LIVING
+}
+
+enum OwnershipType {
+  OWNED
+  RENTED
+}
+
+enum BedStatus {
+  VACANT
+  OCCUPIED
+}
+
+enum TenantStatus {
+  ACTIVE
+  NOTICE_PERIOD
+  VACATED
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+enum PaymentMode {
+  UPI
+  CASH
+  CARD
+  BANK_TRANSFER
+}
+
+enum ExpenseCategory {
+  MANAGERS
+  MARKETING
+  GENERAL
+  PROPERTY_SPECIFIC
+  FOOD
+  RENT_TO_LANDLORDS
+  CAPEX
+}
+
+enum SalaryPaymentStatus {
+  PAID
+  PENDING
+  PARTIAL
+}
+
+enum InvestmentType {
+  INVESTMENT
+  RETURN
+}
+
+enum TicketCategory {
+  MAINTENANCE
+  FOOD
+  CLEANLINESS
+  WIFI
+  ROOMMATE
+  BILLING
+  GENERAL
+}
+
+enum TicketStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  firebaseUid  String   @unique @map("firebase_uid")
+  name         String
+  phone        String?  @unique
+  email        String?  @unique
+  role         UserRole
+  languagePref Language @default(EN) @map("language_pref")
+  isActive     Boolean  @default(true) @map("is_active")
+  fcmToken     String?  @map("fcm_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant?
+  ticketComments TicketComment[]
+
+  @@map("users")
+}
+
+model Property {
+  id           String        @id @default(uuid())
+  name         String
+  code         String        @unique
+  type         PropertyType
+  ownership    OwnershipType
+  address      String
+  wifiDetails  String?       @map("wifi_details")
+  houseRules   String?       @map("house_rules")
+  mealSchedule String?       @map("meal_schedule")
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  rooms                  Room[]
+  expenses               Expense[]
+  tenants                Tenant[]
+  capexItems             Capex[]
+  supportTickets         SupportTicket[]
+  rentAgreementTemplates RentAgreementTemplate[]
+
+  @@map("properties")
+}
+
+model Room {
+  id         String   @id @default(uuid())
+  propertyId String   @map("property_id")
+  number     String
+  capacity   Int
+  isAc       Boolean  @default(false) @map("is_ac")
+  rateMin    Decimal? @map("rate_min") @db.Decimal(10, 2)
+  rateMax    Decimal? @map("rate_max") @db.Decimal(10, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  property Property @relation(fields: [propertyId], references: [id])
+  beds     Bed[]
+
+  @@unique([propertyId, number])
+  @@map("rooms")
+}
+
+model Bed {
+  id        String    @id @default(uuid())
+  roomId    String    @map("room_id")
+  label     String
+  status    BedStatus @default(VACANT)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  room   Room    @relation(fields: [roomId], references: [id])
+  tenant Tenant?
+
+  @@unique([roomId, label])
+  @@map("beds")
+}
+
+model Tenant {
+  id                    String       @id @default(uuid())
+  userId                String       @unique @map("user_id")
+  bedId                 String       @unique @map("bed_id")
+  propertyId            String       @map("property_id")
+  rate                  Decimal      @db.Decimal(10, 2)
+  checkIn               DateTime     @map("check_in")
+  checkOut              DateTime?    @map("check_out")
+  securityExpected      Decimal      @default(0) @map("security_expected") @db.Decimal(10, 2)
+  securityReceived      Decimal      @default(0) @map("security_received") @db.Decimal(10, 2)
+  securityToReturn      Decimal      @default(0) @map("security_to_return") @db.Decimal(10, 2)
+  securityAdjustment    Decimal      @default(0) @map("security_adjustment") @db.Decimal(10, 2)
+  electricityCharge     Decimal?     @map("electricity_charge") @db.Decimal(10, 2)
+  previousBalance       Decimal      @default(0) @map("previous_balance") @db.Decimal(10, 2)
+  aadhaarImageUrl       String?      @map("aadhaar_image_url")
+  aadhaarNumberMasked   String?      @map("aadhaar_number_masked")
+  aadhaarNumberEncrypted String?     @map("aadhaar_number_encrypted")
+  fathersName           String?      @map("fathers_name")
+  aadhaarAddress        String?      @map("aadhaar_address")
+  rentAgreementUrl      String?      @map("rent_agreement_url")
+  discount              Decimal?     @db.Decimal(10, 2)
+  discountNotes         String?      @map("discount_notes")
+  remarks               String?
+  status                TenantStatus @default(ACTIVE)
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
+
+  user           User            @relation(fields: [userId], references: [id])
+  bed            Bed             @relation(fields: [bedId], references: [id])
+  property       Property        @relation(fields: [propertyId], references: [id])
+  invoices       Invoice[]
+  supportTickets SupportTicket[]
+
+  @@map("tenants")
+}
+
+model Invoice {
+  id         String        @id @default(uuid())
+  tenantId   String        @map("tenant_id")
+  month      Int
+  year       Int
+  amountDue  Decimal       @map("amount_due") @db.Decimal(10, 2)
+  amountPaid Decimal       @default(0) @map("amount_paid") @db.Decimal(10, 2)
+  status     InvoiceStatus @default(PENDING)
+  dueDate    DateTime      @map("due_date")
+  notes      String?
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  payments Payment[]
+
+  @@unique([tenantId, month, year])
+  @@map("invoices")
+}
+
+model Payment {
+  id          String      @id @default(uuid())
+  invoiceId   String      @map("invoice_id")
+  amount      Decimal     @db.Decimal(10, 2)
+  date        DateTime
+  mode        PaymentMode
+  razorpayId  String?     @map("razorpay_id")
+  recordedBy  String      @map("recorded_by")
+  notes       String?
+  receiptUrl  String?     @map("receipt_url")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("payments")
+}
+
+model Expense {
+  id          String          @id @default(uuid())
+  propertyId  String?         @map("property_id")
+  date        DateTime
+  amount      Decimal         @db.Decimal(10, 2)
+  category    ExpenseCategory
+  subCategory String?         @map("sub_category")
+  paidBy      String          @map("paid_by")
+  mode        PaymentMode
+  notes       String?
+  receiptUrl  String?         @map("receipt_url")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  property Property? @relation(fields: [propertyId], references: [id])
+
+  @@map("expenses")
+}
+
+model Staff {
+  id         String      @id @default(uuid())
+  name       String
+  role       String
+  salary     Decimal     @db.Decimal(10, 2)
+  propertyId String?     @map("property_id")
+  status     StaffStatus @default(ACTIVE)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  salaryRecords SalaryRecord[]
+
+  @@map("staff")
+}
+
+model SalaryRecord {
+  id             String              @id @default(uuid())
+  staffId        String              @map("staff_id")
+  month          Int
+  year           Int
+  daysWorked     Int                 @map("days_worked")
+  payableSalary  Decimal             @map("payable_salary") @db.Decimal(10, 2)
+  advance        Decimal             @default(0) @db.Decimal(10, 2)
+  balance        Decimal             @db.Decimal(10, 2)
+  status         SalaryPaymentStatus @default(PENDING)
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  staff Staff @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, month, year])
+  @@map("salary_records")
+}
+
+model Capex {
+  id         String   @id @default(uuid())
+  propertyId String?  @map("property_id")
+  category   String
+  item       String
+  amount     Decimal  @db.Decimal(10, 2)
+  date       DateTime
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  property Property? @relation(fields: [propertyId], references: [id])
+
+  @@map("capex")
+}
+
+model Investment {
+  id             String         @id @default(uuid())
+  investorName   String         @map("investor_name")
+  date           DateTime
+  maturityMonth  Int            @map("maturity_month")
+  maturityYear   Int            @map("maturity_year")
+  amount         Decimal        @db.Decimal(10, 2)
+  type           InvestmentType
+  notes          String?
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  @@map("investments")
+}
+
+model SupportTicket {
+  id          String         @id @default(uuid())
+  tenantId    String         @map("tenant_id")
+  propertyId  String         @map("property_id")
+  category    TicketCategory
+  description String
+  status      TicketStatus   @default(OPEN)
+  assignedTo  String?        @map("assigned_to")
+  resolvedAt  DateTime?      @map("resolved_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id])
+  property Property        @relation(fields: [propertyId], references: [id])
+  comments TicketComment[]
+
+  @@map("support_tickets")
+}
+
+model TicketComment {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  userId    String   @map("user_id")
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@map("ticket_comments")
+}
+
+model GoalConfig {
+  id              String   @id @default(uuid())
+  month           Int
+  year            Int
+  propertyTargets Json     @map("property_targets")
+  baseSalary      Decimal  @map("base_salary") @db.Decimal(10, 2)
+  incentiveTiers  Json     @map("incentive_tiers")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([month, year])
+  @@map("goal_configs")
+}
+
+model RentAgreementTemplate {
+  id           String   @id @default(uuid())
+  propertyId   String?  @map("property_id")
+  name         String
+  templateUrl  String   @map("template_url")
+  variables    Json
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdBy    String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  property Property? @relation(fields: [propertyId], references: [id])
+
+  @@map("rent_agreement_templates")
+}
