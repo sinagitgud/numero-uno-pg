@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm run build --workspace=apps/backend"
+buildCommand = "cd apps/backend && npx prisma generate && npm run build"
 
 [deploy]
 startCommand = "npm run db:migrate:prod && node dist/index.js"
