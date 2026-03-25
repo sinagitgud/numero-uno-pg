@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install && npm run build"
+buildCommand = "npm run build --workspace=apps/backend"
 
 [deploy]
 startCommand = "npm run db:migrate:prod && node dist/index.js"
