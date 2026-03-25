@@ -2,7 +2,7 @@ import withPWAInit from '@ducanh2912/next-pwa';
 
 // Build-time env validation
 if (!process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV === 'production') {
-  throw new Error('NEXT_PUBLIC_API_URL is required');
+  console.warn('Warning: NEXT_PUBLIC_API_URL is not set');
 }
 
 const withPWA = withPWAInit({
