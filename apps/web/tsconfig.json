@@ -13,6 +13,7 @@
     "jsx": "preserve",
     "incremental": true,
     "plugins": [{ "name": "next" }],
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
       "@numero-uno-pg/shared": ["../../packages/shared/src/index.ts"]
