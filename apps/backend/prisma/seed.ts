@@ -259,10 +259,125 @@ async function main() {
     },
   });
 
+  // ─── Demo accounts for Expo Go testing ────────────────────────────────────
+  // In dev mode: phone number = token (no real OTP needed)
+  // Login: enter the phone below → enter ANY 6-digit code → you're in
+
+  const owner = await prisma.user.upsert({
+    where: { firebaseUid: '+911111111111' },
+    update: {},
+    create: {
+      firebaseUid: '+911111111111',
+      name: 'Siddharth (Owner)',
+      phone: '+911111111111',
+      role: 'OWNER',
+      isActive: true,
+    },
+  });
+
+  const salesManager = await prisma.user.upsert({
+    where: { firebaseUid: '+912222222222' },
+    update: {},
+    create: {
+      firebaseUid: '+912222222222',
+      name: 'Ravi (Sales Manager)',
+      phone: '+912222222222',
+      role: 'SALES_MANAGER',
+      isActive: true,
+    },
+  });
+
+  const tenantUser = await prisma.user.upsert({
+    where: { firebaseUid: '+913333333333' },
+    update: {},
+    create: {
+      firebaseUid: '+913333333333',
+      name: 'Arjun Mehta (Demo Tenant)',
+      phone: '+913333333333',
+      role: 'TENANT',
+      isActive: true,
+    },
+  });
+
+  // Link demo tenant to a bed in The Haven
+  const havenProp = await prisma.property.findUnique({ where: { code: 'B-403' } });
+  const havenRoom = await prisma.room.findFirst({ where: { propertyId: havenProp!.id, number: '2' } });
+  const havenBed = await prisma.bed.findFirst({ where: { roomId: havenRoom!.id, label: 'Bed 1' } });
+
+  if (havenBed && !await prisma.tenant.findFirst({ where: { userId: tenantUser.id } })) {
+    const tenant = await prisma.tenant.create({
+      data: {
+        userId: tenantUser.id,
+        bedId: havenBed.id,
+        propertyId: havenProp!.id,
+        rate: 9500,
+        checkIn: new Date('2026-01-15'),
+        securityExpected: 9500,
+        securityReceived: 9500,
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.bed.update({ where: { id: havenBed.id }, data: { status: 'OCCUPIED' } });
+
+    // Create a pending invoice for March 2026
+    await prisma.invoice.upsert({
+      where: { tenantId_month_year: { tenantId: tenant.id, month: 3, year: 2026 } },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        month: 3,
+        year: 2026,
+        amountDue: 9500,
+        amountPaid: 0,
+        status: 'PENDING',
+        dueDate: new Date('2026-03-05'),
+      },
+    });
+
+    // Create a paid invoice for February 2026
+    await prisma.invoice.upsert({
+      where: { tenantId_month_year: { tenantId: tenant.id, month: 2, year: 2026 } },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        month: 2,
+        year: 2026,
+        amountDue: 9500,
+        amountPaid: 9500,
+        status: 'PAID',
+        dueDate: new Date('2026-02-05'),
+      },
+    });
+
+    console.log('✅ Demo tenant created with 2 invoices (1 pending, 1 paid)');
+  }
+
+  // Demo ticket
+  const demoTenant = await prisma.tenant.findFirst({ where: { userId: tenantUser.id } });
+  if (demoTenant && !await prisma.supportTicket.findFirst({ where: { tenantId: demoTenant.id } })) {
+    await prisma.supportTicket.create({
+      data: {
+        tenantId: demoTenant.id,
+        propertyId: havenProp!.id,
+        category: 'WIFI',
+        description: 'WiFi speed very slow in Room 2 since last week.',
+        status: 'IN_PROGRESS',
+        assignedTo: owner.id,
+      },
+    });
+  }
+
+  console.log('');
   console.log('✅ Seed complete!');
   console.log('📋 Properties: 6 PG + 1 office');
   console.log('🛏️  Beds: 66 total (15+9+14+16+6+6+1)');
   console.log('🎯 Goal config: March 2026 created');
+  console.log('');
+  console.log('👤 DEMO ACCOUNTS (for Expo Go testing):');
+  console.log('   Owner:         +911111111111  →  sees all tabs + dashboard');
+  console.log('   Sales Manager: +912222222222  →  sees tenants + rent tabs');
+  console.log('   Tenant:        +913333333333  →  sees rent, tickets, info, guests, leave');
+  console.log('   (Enter any 6-digit code when asked for OTP)');
 }
 
 main()

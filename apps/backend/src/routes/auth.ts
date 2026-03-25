@@ -9,8 +9,11 @@ export const authRoutes = Router();
 /**
  * POST /api/auth/register
  * Called after Firebase phone OTP or email login succeeds on the mobile app.
- * Creates a user record if first time, or returns existing user.
- * Tenant registrations are created with isActive=false pending approval.
+ * In dev mode (no Firebase), the Bearer token IS the phone number and is used
+ * directly as the firebaseUid. This lets staff and tenants test without real OTP.
+ *
+ * Tenant registrations start with isActive=false pending staff approval.
+ * Staff accounts (non-TENANT roles) are activated immediately.
  */
 authRoutes.post('/register', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
@@ -19,26 +22,53 @@ authRoutes.post('/register', async (req: Request, res: Response) => {
   }
 
   const token = authHeader.split(' ')[1];
+  const { name, role, phone, email } = req.body;
 
   try {
-    const decoded = await auth.verifyIdToken(token);
-    const { name, role } = req.body;
+    let uid: string;
+    let phoneParsed: string | null = phone || null;
+    let emailParsed: string | null = email || null;
+    let nameParsed: string = name || 'Unknown';
 
-    // Check if user already exists
-    let user = await prisma.user.findUnique({ where: { firebaseUid: decoded.uid } });
+    if (!auth) {
+      // Dev mode: Bearer token is used as-is for firebaseUid
+      uid = token;
+    } else {
+      const decoded = await auth.verifyIdToken(token);
+      uid = decoded.uid;
+      phoneParsed = decoded.phone_number || phone || null;
+      emailParsed = decoded.email || email || null;
+      nameParsed = decoded.name || name || 'Unknown';
+    }
+
+    // First try finding by firebaseUid
+    let user = await prisma.user.findUnique({ where: { firebaseUid: uid } });
+
+    // If not found and phone provided, try finding by phone (handles staff-created tenants
+    // who later register via the app — links the Firebase UID to the pre-existing record)
+    if (!user && phoneParsed) {
+      const byPhone = await prisma.user.findUnique({ where: { phone: phoneParsed } });
+      if (byPhone) {
+        user = await prisma.user.update({
+          where: { id: byPhone.id },
+          data: { firebaseUid: uid },
+        });
+      }
+    }
 
     if (!user) {
-      // Tenant registrations need approval; staff accounts are pre-provisioned
-      const isActive = role !== 'TENANT';
-
+      // D16: Always create self-registering users as TENANT.
+      // Staff accounts (OWNER / SALES_MANAGER / OPS_MANAGER) are pre-created
+      // by the owner via /api/staff and linked above via phone lookup.
+      // Trusting client-supplied role would allow anyone to self-assign OWNER.
       user = await prisma.user.create({
         data: {
-          firebaseUid: decoded.uid,
-          name: name || decoded.name || 'Unknown',
-          phone: decoded.phone_number || null,
-          email: decoded.email || null,
-          role: (role as UserRole) || 'TENANT',
-          isActive,
+          firebaseUid: uid,
+          name: nameParsed,
+          phone: phoneParsed,
+          email: emailParsed,
+          role: 'TENANT',
+          isActive: false,
         },
       });
     }
@@ -74,93 +104,71 @@ authRoutes.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         },
       },
     });
-
     return res.json({ success: true, data: user });
-  } catch (err) {
+  } catch {
     return res.status(500).json({ success: false, error: 'Failed to fetch profile' });
   }
 });
 
 /**
  * PATCH /api/auth/language
- * Update user language preference (EN or HI).
  */
 authRoutes.patch('/language', authenticate, async (req: AuthRequest, res: Response) => {
   const { language } = req.body;
   if (!['EN', 'HI'].includes(language)) {
     return res.status(400).json({ success: false, error: 'Invalid language. Use EN or HI.' });
   }
-
   try {
-    await prisma.user.update({
-      where: { id: req.user!.id },
-      data: { languagePref: language },
-    });
-    return res.json({ success: true, message: 'Language updated' });
-  } catch (err) {
+    await prisma.user.update({ where: { id: req.user!.id }, data: { languagePref: language } });
+    return res.json({ success: true });
+  } catch {
     return res.status(500).json({ success: false, error: 'Failed to update language' });
   }
 });
 
 /**
  * PATCH /api/auth/fcm-token
- * Save FCM push notification token for the device.
  */
 authRoutes.patch('/fcm-token', authenticate, async (req: AuthRequest, res: Response) => {
   const { fcmToken } = req.body;
-  if (!fcmToken) {
-    return res.status(400).json({ success: false, error: 'fcmToken is required' });
-  }
-
+  if (!fcmToken) return res.status(400).json({ success: false, error: 'fcmToken is required' });
   try {
-    await prisma.user.update({
-      where: { id: req.user!.id },
-      data: { fcmToken },
-    });
-    return res.json({ success: true, message: 'FCM token saved' });
-  } catch (err) {
+    await prisma.user.update({ where: { id: req.user!.id }, data: { fcmToken } });
+    return res.json({ success: true });
+  } catch {
     return res.status(500).json({ success: false, error: 'Failed to save FCM token' });
   }
 });
 
 /**
  * GET /api/auth/pending-approvals
- * Owner/Sales Manager: list tenant registrations awaiting approval.
  */
 authRoutes.get('/pending-approvals', authenticate, async (req: AuthRequest, res: Response) => {
-  const role = req.user!.role;
-  if (!['OWNER', 'SALES_MANAGER'].includes(role)) {
+  if (!['OWNER', 'SALES_MANAGER'].includes(req.user!.role)) {
     return res.status(403).json({ success: false, error: 'Access denied' });
   }
-
   try {
     const pending = await prisma.user.findMany({
       where: { role: 'TENANT', isActive: false },
       select: { id: true, name: true, phone: true, email: true, createdAt: true },
     });
     return res.json({ success: true, data: pending });
-  } catch (err) {
+  } catch {
     return res.status(500).json({ success: false, error: 'Failed to fetch pending approvals' });
   }
 });
 
 /**
  * POST /api/auth/approve/:userId
- * Owner/Sales Manager: approve a tenant registration.
  */
 authRoutes.post('/approve/:userId', authenticate, async (req: AuthRequest, res: Response) => {
-  const role = req.user!.role;
-  if (!['OWNER', 'SALES_MANAGER'].includes(role)) {
+  if (!['OWNER', 'SALES_MANAGER'].includes(req.user!.role)) {
     return res.status(403).json({ success: false, error: 'Access denied' });
   }
-
   try {
-    await prisma.user.update({
-      where: { id: req.params.userId },
-      data: { isActive: true },
-    });
+    await prisma.user.update({ where: { id: req.params.userId }, data: { isActive: true } });
     return res.json({ success: true, message: 'User approved' });
-  } catch (err) {
+  } catch {
     return res.status(500).json({ success: false, error: 'Failed to approve user' });
   }
 });

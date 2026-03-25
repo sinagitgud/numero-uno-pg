@@ -32,10 +32,18 @@ export async function authenticate(
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = await auth.verifyIdToken(token);
+    // Dev mode: if Firebase not configured, allow any Bearer token as a user ID directly.
+    // firebase.ts guarantees this path is NEVER reached in production (it exits on startup).
+    let uid: string;
+    if (!auth) {
+      uid = token; // In dev, pass userId directly as the bearer token
+    } else {
+      const decoded = await auth.verifyIdToken(token);
+      uid = decoded.uid;
+    }
 
     const user = await prisma.user.findUnique({
-      where: { firebaseUid: decoded.uid },
+      where: { firebaseUid: uid },
       select: {
         id: true,
         firebaseUid: true,

@@ -1,7 +1,43 @@
 // ─── User Roles ───────────────────────────────────────────────────────────────
 export type UserRole = 'OWNER' | 'SALES_MANAGER' | 'OPS_MANAGER' | 'TENANT';
 
-export type Language = 'en' | 'hi';
+// Backend stores language as uppercase ('EN' | 'HI')
+export type Language = 'EN' | 'HI';
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+export interface User {
+  id: string;
+  firebaseUid: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  role: UserRole;
+  isActive: boolean;
+  languagePref?: Language;
+  fcmToken?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Returned by POST /api/auth/register — the minimal profile stored in auth state */
+export interface AuthUser {
+  id: string;
+  name: string;
+  role: UserRole;
+  isActive: boolean;
+  isPendingApproval: boolean;
+}
+
+// ─── Date utility ─────────────────────────────────────────────────────────────
+/**
+ * JSON serialisation converts Date → string. Use this everywhere you need
+ * a JS Date from an API response field typed as Date.
+ */
+export function parseDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  return new Date(value);
+}
 
 // ─── Property ─────────────────────────────────────────────────────────────────
 export type PropertyType = 'PG' | 'OFFICE' | 'CO_LIVING';
@@ -230,9 +266,10 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+// D9: Backend returns { data, total, page, pages } — NOT { items, pageSize }
 export interface PaginatedResponse<T> {
-  items: T[];
+  data: T[];
   total: number;
   page: number;
-  pageSize: number;
+  pages: number;
 }

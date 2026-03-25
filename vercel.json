@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "buildCommand": "npm install --workspace=apps/web && npm run build --workspace=apps/web",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- apps/web/ packages/"
+}

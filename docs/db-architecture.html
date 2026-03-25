@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Numero Uno PG — Database Architecture</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3e;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --accent: #7c3aed;
+    --accent-light: #a78bfa;
+
+    --c-identity:  #1e3a5f;
+    --c-property:  #14532d;
+    --c-tenancy:   #44270a;
+    --c-billing:   #1a2e4a;
+    --c-ops:       #3b1f4b;
+    --c-finance:   #1c3a2e;
+    --c-services:  #2d1f0f;
+    --c-sales:     #1a2f1a;
+    --c-propops:   #2a1f3d;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ──────────────────────────────── */
+  .page-header {
+    background: linear-gradient(135deg, #1a1d27 0%, #0f1117 50%, #1a0f2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 40px 36px;
+    position: relative;
+    overflow: hidden;
+  }
+  .page-header::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .header-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(124,58,237,0.15);
+    border: 1px solid rgba(124,58,237,0.3);
+    color: #a78bfa;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 12px; border-radius: 20px; margin-bottom: 16px;
+  }
+  .header-badge::before { content: '●'; color: #7c3aed; font-size: 8px; }
+  h1 {
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: 800; letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #e2e8f0 0%, #a78bfa 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 10px;
+  }
+  .header-sub {
+    color: var(--muted); font-size: 15px; max-width: 560px;
+  }
+  .stats-row {
+    display: flex; gap: 32px; margin-top: 28px; flex-wrap: wrap;
+  }
+  .stat {
+    display: flex; flex-direction: column;
+  }
+  .stat-value {
+    font-size: 28px; font-weight: 800; color: #a78bfa;
+    letter-spacing: -0.03em; line-height: 1;
+  }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+
+  /* ── Nav ─────────────────────────────────── */
+  .nav {
+    display: flex; gap: 4px; padding: 12px 40px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 100;
+    overflow-x: auto;
+  }
+  .nav-btn {
+    background: none; border: none; color: var(--muted);
+    font-size: 13px; padding: 6px 14px; border-radius: 6px;
+    cursor: pointer; white-space: nowrap; transition: all 0.15s;
+  }
+  .nav-btn:hover, .nav-btn.active {
+    background: rgba(124,58,237,0.15); color: #a78bfa;
+  }
+
+  /* ── Content wrapper ─────────────────────── */
+  .content { padding: 40px; max-width: 1400px; margin: 0 auto; }
+
+  section { margin-bottom: 60px; }
+  .section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* ── ERD Diagram ─────────────────────────── */
+  .diagram-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    overflow: auto;
+  }
+  .diagram-wrap .mermaid {
+    display: flex; justify-content: center;
+  }
+
+  /* ── Domain Groups ───────────────────────── */
+  .domains {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .domain-card {
+    border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+  }
+  .domain-header {
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .domain-icon { font-size: 18px; }
+  .domain-name { font-weight: 700; font-size: 13px; }
+  .domain-count {
+    margin-left: auto;
+    font-size: 11px; color: var(--muted);
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px; border-radius: 10px;
+  }
+  .domain-tables { padding: 12px 18px; display: flex; flex-direction: column; gap: 2px; }
+  .domain-table-name {
+    font-size: 12px; font-family: 'Cascadia Code', 'Fira Code', monospace;
+    color: #94a3b8; padding: 3px 0;
+  }
+  .domain-table-name::before { content: '↳ '; color: var(--border); }
+
+  /* ── Table Cards ─────────────────────────── */
+  .table-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+  }
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .table-card:hover { border-color: rgba(124,58,237,0.4); }
+  .table-card-header {
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .table-card-name {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 14px; font-weight: 600; color: #a78bfa;
+  }
+  .table-card-badge {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 2px 8px; border-radius: 10px;
+  }
+  .badge-identity  { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .badge-property  { background: rgba(34,197,94,0.12); color: #4ade80; }
+  .badge-tenancy   { background: rgba(251,146,60,0.15); color: #fb923c; }
+  .badge-billing   { background: rgba(99,102,241,0.15); color: #818cf8; }
+  .badge-ops       { background: rgba(168,85,247,0.15); color: #c084fc; }
+  .badge-finance   { background: rgba(20,184,166,0.15); color: #2dd4bf; }
+  .badge-services  { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .badge-sales     { background: rgba(52,211,153,0.15); color: #34d399; }
+  .badge-propops   { background: rgba(244,114,182,0.15); color: #f472b6; }
+
+  table.fields {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  table.fields th {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); padding: 8px 18px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  table.fields td {
+    padding: 7px 18px; border-bottom: 1px solid rgba(42,45,62,0.6);
+    vertical-align: top;
+  }
+  table.fields tr:last-child td { border-bottom: none; }
+  .field-name {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    color: #e2e8f0; white-space: nowrap;
+  }
+  .field-type { color: #60a5fa; white-space: nowrap; }
+  .field-note { color: var(--muted); font-size: 11px; }
+  .tag {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 1px 5px; border-radius: 4px; margin-left: 4px;
+    vertical-align: middle;
+  }
+  .tag-pk { background: rgba(251,191,36,0.2); color: #fbbf24; }
+  .tag-fk { background: rgba(99,102,241,0.2); color: #818cf8; }
+  .tag-uk { background: rgba(34,197,94,0.2); color: #4ade80; }
+
+  /* ── Relations ───────────────────────────── */
+  .relations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+  }
+  .relation-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .rel-from { font-family: monospace; color: #a78bfa; font-size: 13px; }
+  .rel-arrow { color: var(--muted); font-size: 18px; flex-shrink: 0; }
+  .rel-to   { font-family: monospace; color: #60a5fa; font-size: 13px; }
+  .rel-label { font-size: 11px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+  /* ── Enum Reference ──────────────────────── */
+  .enums-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .enum-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .enum-name {
+    font-family: monospace; font-size: 13px; font-weight: 600;
+    color: #f472b6; margin-bottom: 8px;
+  }
+  .enum-values { display: flex; flex-wrap: wrap; gap: 5px; }
+  .enum-val {
+    font-size: 11px; padding: 2px 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px; color: #94a3b8;
+    font-family: monospace;
+  }
+
+  /* ── Scrollbar ───────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media (max-width: 700px) {
+    .content { padding: 20px 16px; }
+    .page-header { padding: 32px 16px 24px; }
+    .nav { padding: 10px 16px; }
+    .stats-row { gap: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────── -->
+<div class="page-header">
+  <div class="header-badge">Work In Progress · Confidential</div>
+  <h1>Numero Uno PG</h1>
+  <p class="header-sub">Database architecture · PostgreSQL + Prisma ORM · Multi-property PG management platform</p>
+  <div class="stats-row">
+    <div class="stat"><span class="stat-value">20</span><span class="stat-label">Tables</span></div>
+    <div class="stat"><span class="stat-value">14</span><span class="stat-label">Enums</span></div>
+    <div class="stat"><span class="stat-value">40+</span><span class="stat-label">Relations</span></div>
+    <div class="stat"><span class="stat-value">9</span><span class="stat-label">Domains</span></div>
+  </div>
+</div>
+
+<!-- ── Nav ────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="scrollTo('erd')">ERD Diagram</button>
+  <button class="nav-btn" onclick="scrollTo('domains')">Domains</button>
+  <button class="nav-btn" onclick="scrollTo('tables')">Table Reference</button>
+  <button class="nav-btn" onclick="scrollTo('relations')">Relations</button>
+  <button class="nav-btn" onclick="scrollTo('enums')">Enums</button>
+</nav>
+
+<div class="content">
+
+  <!-- ── ERD Diagram ──────────────────────────────────────────────── -->
+  <section id="erd">
+    <div class="section-title">Entity Relationship Diagram</div>
+    <div class="diagram-wrap">
+      <div class="mermaid">
+erDiagram
+  users {
+    uuid id PK
+    string firebase_uid UK
+    string name
+    string phone UK
+    string email UK
+    enum role "OWNER|SALES_MGR|OPS_MGR|TENANT"
+    boolean is_active
+  }
+  properties {
+    uuid id PK
+    string name
+    string code UK
+    enum type "PG|OFFICE|CO_LIVING"
+    enum ownership "OWNED|RENTED"
+    string address
+  }
+  rooms {
+    uuid id PK
+    uuid property_id FK
+    string number
+    int capacity
+    boolean is_ac
+    decimal rate_min
+    decimal rate_max
+  }
+  beds {
+    uuid id PK
+    uuid room_id FK
+    string label
+    enum status "VACANT|OCCUPIED"
+  }
+  tenants {
+    uuid id PK
+    uuid user_id FK_UK
+    uuid bed_id FK_UK
+    uuid property_id FK
+    decimal rate
+    datetime check_in
+    datetime check_out
+    decimal security_expected
+    decimal security_received
+    enum status "ACTIVE|NOTICE|VACATED"
+  }
+  invoices {
+    uuid id PK
+    uuid tenant_id FK
+    int month
+    int year
+    decimal amount_due
+    decimal amount_paid
+    enum status "PENDING|PARTIAL|PAID|OVERDUE"
+    datetime due_date
+  }
+  payments {
+    uuid id PK
+    uuid invoice_id FK
+    decimal amount
+    datetime date
+    enum mode "UPI|CASH|CARD|BANK"
+    string razorpay_id
+    string recorded_by
+  }
+  expenses {
+    uuid id PK
+    uuid property_id FK
+    datetime date
+    decimal amount
+    enum category
+    enum mode
+    string paid_by
+  }
+  staff {
+    uuid id PK
+    string name
+    string role
+    decimal salary
+    uuid property_id
+    enum status "ACTIVE|INACTIVE"
+  }
+  salary_records {
+    uuid id PK
+    uuid staff_id FK
+    int month
+    int year
+    int days_worked
+    decimal payable_salary
+    decimal balance
+    enum status
+  }
+  capex {
+    uuid id PK
+    uuid property_id FK
+    string category
+    string item
+    decimal amount
+    datetime date
+  }
+  investments {
+    uuid id PK
+    string investor_name
+    decimal amount
+    enum type "INVESTMENT|RETURN"
+    int maturity_month
+    int maturity_year
+  }
+  support_tickets {
+    uuid id PK
+    uuid tenant_id FK
+    uuid property_id FK
+    enum category
+    string description
+    enum status "OPEN|ACK|IN_PROG|RESOLVED|CLOSED"
+  }
+  ticket_comments {
+    uuid id PK
+    uuid ticket_id FK
+    uuid user_id FK
+    string message
+    datetime created_at
+  }
+  guest_logs {
+    uuid id PK
+    uuid tenant_id FK
+    uuid property_id FK
+    string visitor_name
+    string visitor_phone
+    datetime expected_in
+    datetime expected_out
+    datetime actual_out
+  }
+  leave_requests {
+    uuid id PK
+    uuid tenant_id FK
+    datetime from_date
+    datetime to_date
+    string reason
+    enum status "PENDING|APPROVED|REJECTED"
+  }
+  food_menu_items {
+    uuid id PK
+    uuid property_id FK
+    enum day_of_week
+    enum meal_type "BREAKFAST|LUNCH|DINNER"
+    string items
+  }
+  goal_configs {
+    uuid id PK
+    int month
+    int year
+    json property_targets
+    decimal base_salary
+    json incentive_tiers
+  }
+  rent_agreement_templates {
+    uuid id PK
+    uuid property_id FK
+    string name
+    string template_url
+    json variables
+    boolean is_default
+  }
+  inquiries {
+    uuid id PK
+    string name
+    string phone
+    uuid property_id FK
+    int budget
+    enum status "NEW|CONTACTED|VISIT|CONVERTED|DROPPED"
+    string assigned_to FK
+  }
+
+  users ||--o| tenants : "has profile"
+  users ||--o{ ticket_comments : "writes"
+  users ||--o{ inquiries : "assigned to"
+
+  properties ||--o{ rooms : "has"
+  properties ||--o{ expenses : "incurs"
+  properties ||--o{ capex : "owns"
+  properties ||--o{ support_tickets : "receives"
+  properties ||--o{ guest_logs : "logs"
+  properties ||--o{ food_menu_items : "serves"
+  properties ||--o{ rent_agreement_templates : "uses"
+  properties ||--o{ inquiries : "receives"
+  properties ||--o{ tenants : "houses"
+
+  rooms ||--o{ beds : "contains"
+  beds ||--o| tenants : "occupied by"
+
+  tenants ||--o{ invoices : "billed"
+  tenants ||--o{ support_tickets : "raises"
+  tenants ||--o{ guest_logs : "registers"
+  tenants ||--o{ leave_requests : "applies"
+
+  invoices ||--o{ payments : "settled by"
+
+  support_tickets ||--o{ ticket_comments : "has"
+
+  staff ||--o{ salary_records : "receives"
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Domain Groups ────────────────────────────────────────────── -->
+  <section id="domains">
+    <div class="section-title">Domain Groups</div>
+    <div class="domains">
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(59,130,246,0.08)">
+          <span class="domain-icon">🔐</span>
+          <span class="domain-name">Identity &amp; Access</span>
+          <span class="domain-count">1 table</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">users</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">Central auth record. Firebase handles authentication; this table stores role, preferences, and links all activity to a person.</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(34,197,94,0.08)">
+          <span class="domain-icon">🏢</span>
+          <span class="domain-name">Property Structure</span>
+          <span class="domain-count">3 tables</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">properties</div>
+          <div class="domain-table-name">rooms</div>
+          <div class="domain-table-name">beds</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">Physical hierarchy: a Property has Rooms, each Room has Beds. A Bed is the atomic unit that gets assigned to a Tenant.</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(251,146,60,0.08)">
+          <span class="domain-icon">🏠</span>
+          <span class="domain-name">Tenancy</span>
+          <span class="domain-count">1 table</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">tenants</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">The pivotal record. Links a User to a Bed and Property. Stores the monthly rate, security deposit, check-in/out, and KYC details.</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(99,102,241,0.08)">
+          <span class="domain-icon">💳</span>
+          <span class="domain-name">Billing</span>
+          <span class="domain-count">2 tables</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">invoices</div>
+          <div class="domain-table-name">payments</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">One Invoice per tenant per month. Payments are individual transactions against an invoice (supports partial payments, UPI, cash, Razorpay).</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(168,85,247,0.08)">
+          <span class="domain-icon">🔧</span>
+          <span class="domain-name">Operations</span>
+          <span class="domain-count">4 tables</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">expenses</div>
+          <div class="domain-table-name">capex</div>
+          <div class="domain-table-name">staff</div>
+          <div class="domain-table-name">salary_records</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">Day-to-day opex (groceries, utilities, marketing), capital purchases, and on-ground staff payroll.</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(20,184,166,0.08)">
+          <span class="domain-icon">📈</span>
+          <span class="domain-name">Finance</span>
+          <span class="domain-count">1 table</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">investments</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">Tracks investor capital (inflows) and returns (outflows) with maturity dates. Standalone — not linked to properties.</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(251,191,36,0.08)">
+          <span class="domain-icon">🎫</span>
+          <span class="domain-name">Tenant Services</span>
+          <span class="domain-count">4 tables</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">support_tickets</div>
+          <div class="domain-table-name">ticket_comments</div>
+          <div class="domain-table-name">guest_logs</div>
+          <div class="domain-table-name">leave_requests</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">Everything a tenant does through the app: raise issues, register guests, apply for leave.</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(52,211,153,0.08)">
+          <span class="domain-icon">🎯</span>
+          <span class="domain-name">Sales Pipeline</span>
+          <span class="domain-count">1 table</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">inquiries</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">Prospective tenants tracked through the funnel: NEW → CONTACTED → VISIT_SCHEDULED → CONVERTED → DROPPED. Converts to a Tenant record on booking.</p>
+        </div>
+      </div>
+
+      <div class="domain-card">
+        <div class="domain-header" style="background:rgba(244,114,182,0.08)">
+          <span class="domain-icon">⚙️</span>
+          <span class="domain-name">Property Operations</span>
+          <span class="domain-count">3 tables</span>
+        </div>
+        <div class="domain-tables">
+          <div class="domain-table-name">food_menu_items</div>
+          <div class="domain-table-name">goal_configs</div>
+          <div class="domain-table-name">rent_agreement_templates</div>
+          <p style="font-size:12px;color:#64748b;margin-top:6px">Weekly food menus per property, monthly sales targets with incentive tiers, and reusable rent agreement templates.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Table Reference ──────────────────────────────────────────── -->
+  <section id="tables">
+    <div class="section-title">Table Reference</div>
+    <div class="table-grid">
+
+      <!-- users -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">users</span>
+          <span class="table-card-badge badge-identity">Identity</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note">auto-generated</td></tr>
+            <tr><td class="field-name">firebase_uid <span class="tag tag-uk">UK</span></td><td class="field-type">string</td><td class="field-note">Firebase auth UID</td></tr>
+            <tr><td class="field-name">name</td><td class="field-type">string</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">phone <span class="tag tag-uk">UK</span></td><td class="field-type">string?</td><td class="field-note">Tenants: OTP login</td></tr>
+            <tr><td class="field-name">email <span class="tag tag-uk">UK</span></td><td class="field-type">string?</td><td class="field-note">Staff: magic link</td></tr>
+            <tr><td class="field-name">role</td><td class="field-type">UserRole</td><td class="field-note">OWNER / SALES_MANAGER / OPS_MANAGER / TENANT</td></tr>
+            <tr><td class="field-name">language_pref</td><td class="field-type">Language</td><td class="field-note">EN | HI</td></tr>
+            <tr><td class="field-name">fcm_token</td><td class="field-type">string?</td><td class="field-note">Push notification token</td></tr>
+            <tr><td class="field-name">is_active</td><td class="field-type">boolean</td><td class="field-note">Soft disable</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- properties -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">properties</span>
+          <span class="table-card-badge badge-property">Property</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">name</td><td class="field-type">string</td><td class="field-note">e.g. "Numero Uno Lajpat"</td></tr>
+            <tr><td class="field-name">code <span class="tag tag-uk">UK</span></td><td class="field-type">string</td><td class="field-note">Short code, e.g. "NU-LN"</td></tr>
+            <tr><td class="field-name">type</td><td class="field-type">PropertyType</td><td class="field-note">PG | OFFICE | CO_LIVING</td></tr>
+            <tr><td class="field-name">ownership</td><td class="field-type">OwnershipType</td><td class="field-note">OWNED | RENTED</td></tr>
+            <tr><td class="field-name">address</td><td class="field-type">string</td><td class="field-note">Full address</td></tr>
+            <tr><td class="field-name">wifi_details</td><td class="field-type">string?</td><td class="field-note">SSID + password</td></tr>
+            <tr><td class="field-name">house_rules</td><td class="field-type">string?</td><td class="field-note">Displayed to tenants</td></tr>
+            <tr><td class="field-name">meal_schedule</td><td class="field-type">string?</td><td class="field-note">Timing description</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- rooms -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">rooms</span>
+          <span class="table-card-badge badge-property">Property</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ properties</td></tr>
+            <tr><td class="field-name">number <span class="tag tag-uk">UK*</span></td><td class="field-type">string</td><td class="field-note">Unique per property</td></tr>
+            <tr><td class="field-name">capacity</td><td class="field-type">int</td><td class="field-note">Max beds</td></tr>
+            <tr><td class="field-name">is_ac</td><td class="field-type">boolean</td><td class="field-note">Air-conditioned?</td></tr>
+            <tr><td class="field-name">rate_min</td><td class="field-type">decimal?</td><td class="field-note">Pricing range</td></tr>
+            <tr><td class="field-name">rate_max</td><td class="field-type">decimal?</td><td class="field-note">Pricing range</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- beds -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">beds</span>
+          <span class="table-card-badge badge-property">Property</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">room_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ rooms</td></tr>
+            <tr><td class="field-name">label <span class="tag tag-uk">UK*</span></td><td class="field-type">string</td><td class="field-note">e.g. "A", "B", "Top" — unique per room</td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">BedStatus</td><td class="field-note">VACANT | OCCUPIED</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- tenants -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">tenants</span>
+          <span class="table-card-badge badge-tenancy">Tenancy</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">user_id <span class="tag tag-fk">FK</span><span class="tag tag-uk">UK</span></td><td class="field-type">uuid</td><td class="field-note">→ users (1:1)</td></tr>
+            <tr><td class="field-name">bed_id <span class="tag tag-fk">FK</span><span class="tag tag-uk">UK</span></td><td class="field-type">uuid</td><td class="field-note">→ beds (1:1)</td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ properties</td></tr>
+            <tr><td class="field-name">rate</td><td class="field-type">decimal</td><td class="field-note">Monthly rent agreed</td></tr>
+            <tr><td class="field-name">check_in</td><td class="field-type">datetime</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">check_out</td><td class="field-type">datetime?</td><td class="field-note">Set on vacancy</td></tr>
+            <tr><td class="field-name">security_expected</td><td class="field-type">decimal</td><td class="field-note">Security deposit amount</td></tr>
+            <tr><td class="field-name">security_received</td><td class="field-type">decimal</td><td class="field-note">Actual received</td></tr>
+            <tr><td class="field-name">electricity_charge</td><td class="field-type">decimal?</td><td class="field-note">Monthly electricity add-on</td></tr>
+            <tr><td class="field-name">aadhaar_number_masked</td><td class="field-type">string?</td><td class="field-note">e.g. XXXX-XXXX-1234</td></tr>
+            <tr><td class="field-name">aadhaar_number_encrypted</td><td class="field-type">string?</td><td class="field-note">AES-encrypted full number</td></tr>
+            <tr><td class="field-name">rent_agreement_url</td><td class="field-type">string?</td><td class="field-note">R2 storage URL</td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">TenantStatus</td><td class="field-note">ACTIVE | NOTICE_PERIOD | VACATED</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- invoices -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">invoices</span>
+          <span class="table-card-badge badge-billing">Billing</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">tenant_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ tenants</td></tr>
+            <tr><td class="field-name">month</td><td class="field-type">int</td><td class="field-note">1–12</td></tr>
+            <tr><td class="field-name">year</td><td class="field-type">int</td><td class="field-note">e.g. 2026</td></tr>
+            <tr><td class="field-name">amount_due</td><td class="field-type">decimal</td><td class="field-note">Total billable</td></tr>
+            <tr><td class="field-name">amount_paid</td><td class="field-type">decimal</td><td class="field-note">Updated on each Payment</td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">InvoiceStatus</td><td class="field-note">PENDING | PARTIAL | PAID | OVERDUE</td></tr>
+            <tr><td class="field-name">due_date</td><td class="field-type">datetime</td><td class="field-note">Usually 5th of month</td></tr>
+            <tr><td class="field-name">(tenant_id, month, year)</td><td class="field-type">—</td><td class="field-note">Composite unique constraint</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- payments -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">payments</span>
+          <span class="table-card-badge badge-billing">Billing</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">invoice_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ invoices</td></tr>
+            <tr><td class="field-name">amount</td><td class="field-type">decimal</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">date</td><td class="field-type">datetime</td><td class="field-note">Actual payment date</td></tr>
+            <tr><td class="field-name">mode</td><td class="field-type">PaymentMode</td><td class="field-note">UPI | CASH | CARD | BANK_TRANSFER</td></tr>
+            <tr><td class="field-name">razorpay_id</td><td class="field-type">string?</td><td class="field-note">Set for online payments</td></tr>
+            <tr><td class="field-name">recorded_by</td><td class="field-type">string</td><td class="field-note">Staff user ID who recorded</td></tr>
+            <tr><td class="field-name">receipt_url</td><td class="field-type">string?</td><td class="field-note">R2 storage URL of receipt</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- expenses -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">expenses</span>
+          <span class="table-card-badge badge-ops">Operations</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid?</td><td class="field-note">Null = company-wide</td></tr>
+            <tr><td class="field-name">date</td><td class="field-type">datetime</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">amount</td><td class="field-type">decimal</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">category</td><td class="field-type">ExpenseCategory</td><td class="field-note">MANAGERS | MARKETING | GENERAL | FOOD | RENT_TO_LANDLORDS | CAPEX</td></tr>
+            <tr><td class="field-name">sub_category</td><td class="field-type">string?</td><td class="field-note">Free-form label</td></tr>
+            <tr><td class="field-name">paid_by</td><td class="field-type">string</td><td class="field-note">Staff name/ID</td></tr>
+            <tr><td class="field-name">mode</td><td class="field-type">PaymentMode</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">receipt_url</td><td class="field-type">string?</td><td class="field-note">OCR-parsed receipt photo</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- staff -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">staff</span>
+          <span class="table-card-badge badge-ops">Operations</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">name</td><td class="field-type">string</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">role</td><td class="field-type">string</td><td class="field-note">e.g. "Cook", "Cleaner"</td></tr>
+            <tr><td class="field-name">salary</td><td class="field-type">decimal</td><td class="field-note">Monthly base</td></tr>
+            <tr><td class="field-name">property_id</td><td class="field-type">uuid?</td><td class="field-note">Assigned property (nullable)</td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">StaffStatus</td><td class="field-note">ACTIVE | INACTIVE</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- salary_records -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">salary_records</span>
+          <span class="table-card-badge badge-ops">Operations</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">staff_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ staff</td></tr>
+            <tr><td class="field-name">month / year</td><td class="field-type">int</td><td class="field-note">Composite unique</td></tr>
+            <tr><td class="field-name">days_worked</td><td class="field-type">int</td><td class="field-note">Pro-rated calculation</td></tr>
+            <tr><td class="field-name">payable_salary</td><td class="field-type">decimal</td><td class="field-note">After pro-ration</td></tr>
+            <tr><td class="field-name">advance</td><td class="field-type">decimal</td><td class="field-note">Any advance deducted</td></tr>
+            <tr><td class="field-name">balance</td><td class="field-type">decimal</td><td class="field-note">payable − advance</td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">SalaryPaymentStatus</td><td class="field-note">PAID | PENDING | PARTIAL</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- capex -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">capex</span>
+          <span class="table-card-badge badge-ops">Operations</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid?</td><td class="field-note">Null = common asset</td></tr>
+            <tr><td class="field-name">category</td><td class="field-type">string</td><td class="field-note">e.g. "Furniture", "Appliances"</td></tr>
+            <tr><td class="field-name">item</td><td class="field-type">string</td><td class="field-note">Specific item purchased</td></tr>
+            <tr><td class="field-name">amount</td><td class="field-type">decimal</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">date</td><td class="field-type">datetime</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">receipt_url</td><td class="field-type">string?</td><td class="field-note"></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- investments -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">investments</span>
+          <span class="table-card-badge badge-finance">Finance</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">investor_name</td><td class="field-type">string</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">date</td><td class="field-type">datetime</td><td class="field-note">Transaction date</td></tr>
+            <tr><td class="field-name">amount</td><td class="field-type">decimal</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">type</td><td class="field-type">InvestmentType</td><td class="field-note">INVESTMENT (in) | RETURN (out)</td></tr>
+            <tr><td class="field-name">maturity_month / year</td><td class="field-type">int</td><td class="field-note">When return is due</td></tr>
+            <tr><td class="field-name">notes</td><td class="field-type">string?</td><td class="field-note"></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- support_tickets -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">support_tickets</span>
+          <span class="table-card-badge badge-services">Services</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">tenant_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ tenants</td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ properties</td></tr>
+            <tr><td class="field-name">category</td><td class="field-type">TicketCategory</td><td class="field-note">MAINTENANCE | FOOD | CLEANLINESS | WIFI | ROOMMATE | BILLING | GENERAL</td></tr>
+            <tr><td class="field-name">description</td><td class="field-type">string</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">TicketStatus</td><td class="field-note">OPEN → ACK → IN_PROGRESS → RESOLVED → CLOSED</td></tr>
+            <tr><td class="field-name">assigned_to</td><td class="field-type">string?</td><td class="field-note">Staff user ID</td></tr>
+            <tr><td class="field-name">resolved_at</td><td class="field-type">datetime?</td><td class="field-note"></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ticket_comments -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">ticket_comments</span>
+          <span class="table-card-badge badge-services">Services</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">ticket_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ support_tickets</td></tr>
+            <tr><td class="field-name">user_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ users (tenant or staff)</td></tr>
+            <tr><td class="field-name">message</td><td class="field-type">string</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">created_at</td><td class="field-type">datetime</td><td class="field-note">No update tracking needed</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- guest_logs -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">guest_logs</span>
+          <span class="table-card-badge badge-services">Services</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">tenant_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">Who registered the guest</td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">Which property</td></tr>
+            <tr><td class="field-name">visitor_name</td><td class="field-type">string</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">visitor_phone</td><td class="field-type">string?</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">expected_in</td><td class="field-type">datetime</td><td class="field-note">Tenant-provided</td></tr>
+            <tr><td class="field-name">expected_out</td><td class="field-type">datetime?</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">actual_out</td><td class="field-type">datetime?</td><td class="field-note">Set by staff at checkout</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- leave_requests -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">leave_requests</span>
+          <span class="table-card-badge badge-services">Services</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">tenant_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ tenants</td></tr>
+            <tr><td class="field-name">from_date</td><td class="field-type">datetime</td><td class="field-note">Departure date</td></tr>
+            <tr><td class="field-name">to_date</td><td class="field-type">datetime</td><td class="field-note">Return date</td></tr>
+            <tr><td class="field-name">reason</td><td class="field-type">string?</td><td class="field-note">Optional</td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">LeaveStatus</td><td class="field-note">PENDING | APPROVED | REJECTED</td></tr>
+            <tr><td class="field-name">approved_by</td><td class="field-type">string?</td><td class="field-note">Staff user ID</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- inquiries -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">inquiries</span>
+          <span class="table-card-badge badge-sales">Sales</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">name</td><td class="field-type">string</td><td class="field-note">Prospect's name</td></tr>
+            <tr><td class="field-name">phone</td><td class="field-type">string</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">email</td><td class="field-type">string?</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid?</td><td class="field-note">Interested property</td></tr>
+            <tr><td class="field-name">bed_preference</td><td class="field-type">string?</td><td class="field-note">AC / non-AC / single</td></tr>
+            <tr><td class="field-name">budget</td><td class="field-type">int?</td><td class="field-note">Monthly ₹ budget</td></tr>
+            <tr><td class="field-name">status</td><td class="field-type">InquiryStatus</td><td class="field-note">NEW → CONTACTED → VISIT_SCHEDULED → CONVERTED → DROPPED</td></tr>
+            <tr><td class="field-name">assigned_to <span class="tag tag-fk">FK</span></td><td class="field-type">string?</td><td class="field-note">→ users (sales staff)</td></tr>
+            <tr><td class="field-name">converted_tenant_id <span class="tag tag-uk">UK</span></td><td class="field-type">string?</td><td class="field-note">Set when inquiry converts</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- food_menu_items -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">food_menu_items</span>
+          <span class="table-card-badge badge-propops">Prop Ops</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid</td><td class="field-note">→ properties</td></tr>
+            <tr><td class="field-name">day_of_week</td><td class="field-type">DayOfWeek</td><td class="field-note">MON–SUN</td></tr>
+            <tr><td class="field-name">meal_type</td><td class="field-type">MealType</td><td class="field-note">BREAKFAST | LUNCH | DINNER</td></tr>
+            <tr><td class="field-name">items</td><td class="field-type">string</td><td class="field-note">Comma-separated dish list</td></tr>
+            <tr><td class="field-name">(property, day, meal)</td><td class="field-type">—</td><td class="field-note">Composite unique</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- goal_configs -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">goal_configs</span>
+          <span class="table-card-badge badge-propops">Prop Ops</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">month / year</td><td class="field-type">int</td><td class="field-note">Composite unique</td></tr>
+            <tr><td class="field-name">property_targets</td><td class="field-type">json</td><td class="field-note">Per-property occupancy targets</td></tr>
+            <tr><td class="field-name">base_salary</td><td class="field-type">decimal</td><td class="field-note">Sales manager base</td></tr>
+            <tr><td class="field-name">incentive_tiers</td><td class="field-type">json</td><td class="field-note">Achievement % → bonus ₹</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- rent_agreement_templates -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <span class="table-card-name">rent_agreement_templates</span>
+          <span class="table-card-badge badge-propops">Prop Ops</span>
+        </div>
+        <table class="fields">
+          <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td class="field-name">id <span class="tag tag-pk">PK</span></td><td class="field-type">uuid</td><td class="field-note"></td></tr>
+            <tr><td class="field-name">property_id <span class="tag tag-fk">FK</span></td><td class="field-type">uuid?</td><td class="field-note">Null = global template</td></tr>
+            <tr><td class="field-name">name</td><td class="field-type">string</td><td class="field-note">Template display name</td></tr>
+            <tr><td class="field-name">template_url</td><td class="field-type">string</td><td class="field-note">R2 URL to DOCX/PDF template</td></tr>
+            <tr><td class="field-name">variables</td><td class="field-type">json</td><td class="field-note">Placeholder keys + descriptions</td></tr>
+            <tr><td class="field-name">is_default</td><td class="field-type">boolean</td><td class="field-note">Auto-selected for new tenants</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Relations ────────────────────────────────────────────────── -->
+  <section id="relations">
+    <div class="section-title">All Foreign Key Relations</div>
+    <div class="relations-grid">
+      <div class="relation-row"><span class="rel-from">users</span><span class="rel-arrow">⟶</span><span class="rel-to">tenants</span><span class="rel-label">1:1 (one user = one tenant)</span></div>
+      <div class="relation-row"><span class="rel-from">users</span><span class="rel-arrow">⟶</span><span class="rel-to">ticket_comments</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">users</span><span class="rel-arrow">⟶</span><span class="rel-to">inquiries.assigned_to</span><span class="rel-label">1:N (sales assignment)</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">rooms</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">tenants</span><span class="rel-label">1:N (denormalised)</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">expenses</span><span class="rel-label">1:N (nullable)</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">capex</span><span class="rel-label">1:N (nullable)</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">support_tickets</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">guest_logs</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">food_menu_items</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">rent_agreement_templates</span><span class="rel-label">1:N (nullable)</span></div>
+      <div class="relation-row"><span class="rel-from">properties</span><span class="rel-arrow">⟶</span><span class="rel-to">inquiries</span><span class="rel-label">1:N (nullable)</span></div>
+      <div class="relation-row"><span class="rel-from">rooms</span><span class="rel-arrow">⟶</span><span class="rel-to">beds</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">beds</span><span class="rel-arrow">⟶</span><span class="rel-to">tenants</span><span class="rel-label">1:1 (one bed, one tenant)</span></div>
+      <div class="relation-row"><span class="rel-from">tenants</span><span class="rel-arrow">⟶</span><span class="rel-to">invoices</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">tenants</span><span class="rel-arrow">⟶</span><span class="rel-to">support_tickets</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">tenants</span><span class="rel-arrow">⟶</span><span class="rel-to">guest_logs</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">tenants</span><span class="rel-arrow">⟶</span><span class="rel-to">leave_requests</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">invoices</span><span class="rel-arrow">⟶</span><span class="rel-to">payments</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">support_tickets</span><span class="rel-arrow">⟶</span><span class="rel-to">ticket_comments</span><span class="rel-label">1:N</span></div>
+      <div class="relation-row"><span class="rel-from">staff</span><span class="rel-arrow">⟶</span><span class="rel-to">salary_records</span><span class="rel-label">1:N</span></div>
+    </div>
+  </section>
+
+  <!-- ── Enum Reference ────────────────────────────────────────────── -->
+  <section id="enums">
+    <div class="section-title">Enum Reference</div>
+    <div class="enums-grid">
+      <div class="enum-card"><div class="enum-name">UserRole</div><div class="enum-values"><span class="enum-val">OWNER</span><span class="enum-val">SALES_MANAGER</span><span class="enum-val">OPS_MANAGER</span><span class="enum-val">TENANT</span></div></div>
+      <div class="enum-card"><div class="enum-name">PropertyType</div><div class="enum-values"><span class="enum-val">PG</span><span class="enum-val">OFFICE</span><span class="enum-val">CO_LIVING</span></div></div>
+      <div class="enum-card"><div class="enum-name">OwnershipType</div><div class="enum-values"><span class="enum-val">OWNED</span><span class="enum-val">RENTED</span></div></div>
+      <div class="enum-card"><div class="enum-name">BedStatus</div><div class="enum-values"><span class="enum-val">VACANT</span><span class="enum-val">OCCUPIED</span></div></div>
+      <div class="enum-card"><div class="enum-name">TenantStatus</div><div class="enum-values"><span class="enum-val">ACTIVE</span><span class="enum-val">NOTICE_PERIOD</span><span class="enum-val">VACATED</span></div></div>
+      <div class="enum-card"><div class="enum-name">InvoiceStatus</div><div class="enum-values"><span class="enum-val">PENDING</span><span class="enum-val">PARTIAL</span><span class="enum-val">PAID</span><span class="enum-val">OVERDUE</span></div></div>
+      <div class="enum-card"><div class="enum-name">PaymentMode</div><div class="enum-values"><span class="enum-val">UPI</span><span class="enum-val">CASH</span><span class="enum-val">CARD</span><span class="enum-val">BANK_TRANSFER</span></div></div>
+      <div class="enum-card"><div class="enum-name">ExpenseCategory</div><div class="enum-values"><span class="enum-val">MANAGERS</span><span class="enum-val">MARKETING</span><span class="enum-val">GENERAL</span><span class="enum-val">PROPERTY_SPECIFIC</span><span class="enum-val">FOOD</span><span class="enum-val">RENT_TO_LANDLORDS</span><span class="enum-val">CAPEX</span></div></div>
+      <div class="enum-card"><div class="enum-name">TicketCategory</div><div class="enum-values"><span class="enum-val">MAINTENANCE</span><span class="enum-val">FOOD</span><span class="enum-val">CLEANLINESS</span><span class="enum-val">WIFI</span><span class="enum-val">ROOMMATE</span><span class="enum-val">BILLING</span><span class="enum-val">GENERAL</span></div></div>
+      <div class="enum-card"><div class="enum-name">TicketStatus</div><div class="enum-values"><span class="enum-val">OPEN</span><span class="enum-val">ACKNOWLEDGED</span><span class="enum-val">IN_PROGRESS</span><span class="enum-val">RESOLVED</span><span class="enum-val">CLOSED</span></div></div>
+      <div class="enum-card"><div class="enum-name">LeaveStatus</div><div class="enum-values"><span class="enum-val">PENDING</span><span class="enum-val">APPROVED</span><span class="enum-val">REJECTED</span></div></div>
+      <div class="enum-card"><div class="enum-name">InquiryStatus</div><div class="enum-values"><span class="enum-val">NEW</span><span class="enum-val">CONTACTED</span><span class="enum-val">VISIT_SCHEDULED</span><span class="enum-val">CONVERTED</span><span class="enum-val">DROPPED</span></div></div>
+      <div class="enum-card"><div class="enum-name">MealType</div><div class="enum-values"><span class="enum-val">BREAKFAST</span><span class="enum-val">LUNCH</span><span class="enum-val">DINNER</span></div></div>
+      <div class="enum-card"><div class="enum-name">InvestmentType</div><div class="enum-values"><span class="enum-val">INVESTMENT</span><span class="enum-val">RETURN</span></div></div>
+    </div>
+  </section>
+
+  <p style="text-align:center; color:#334155; font-size:12px; padding: 20px 0 40px;">
+    Numero Uno PG · Confidential · Generated 2026-03-25
+  </p>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      background: '#1a1d27',
+      primaryColor: '#7c3aed',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#4c1d95',
+      lineColor: '#4b5563',
+      secondaryColor: '#1e1e2e',
+      tertiaryColor: '#1a1d27',
+      edgeLabelBackground: '#1a1d27',
+      attributeBackgroundColorEven: '#1a1d27',
+      attributeBackgroundColorOdd: '#141520',
+    },
+    er: {
+      diagramPadding: 30,
+      layoutDirection: 'TB',
+      minEntityWidth: 100,
+      minEntityHeight: 75,
+      entityPadding: 15,
+      useMaxWidth: true,
+    }
+  });
+
+  function scrollTo(id) {
+    document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+
+  // Highlight active nav on scroll
+  const sections = ['erd','domains','tables','relations','enums'];
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const idx = sections.indexOf(e.target.id);
+        document.querySelectorAll('.nav-btn').forEach((b,i) => b.classList.toggle('active', i === idx));
+      }
+    });
+  }, { threshold: 0.2 });
+  sections.forEach(id => { const el = document.getElementById(id); if (el) observer.observe(el); });
+</script>
+</body>
+</html>

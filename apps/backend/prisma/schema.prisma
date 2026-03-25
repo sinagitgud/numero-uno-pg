@@ -88,6 +88,28 @@ enum TicketCategory {
   GENERAL
 }
 
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
 enum TicketStatus {
   OPEN
   ACKNOWLEDGED
@@ -116,8 +138,10 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant         Tenant?
-  ticketComments TicketComment[]
+  tenant             Tenant?
+  ticketComments     TicketComment[]
+  assignedInquiries  Inquiry[]       @relation("InquiryAssignee")
+  entryExitLogs      EntryExitLog[]  @relation("EntryExitLogger")
 
   @@map("users")
 }
@@ -142,6 +166,10 @@ model Property {
   capexItems             Capex[]
   supportTickets         SupportTicket[]
   rentAgreementTemplates RentAgreementTemplate[]
+  guestLogs              GuestLog[]
+  foodMenuItems          FoodMenuItem[]
+  inquiries              Inquiry[]
+  entryExitLogs          EntryExitLog[]
 
   @@map("properties")
 }
@@ -211,6 +239,9 @@ model Tenant {
   property       Property        @relation(fields: [propertyId], references: [id])
   invoices       Invoice[]
   supportTickets SupportTicket[]
+  guestLogs      GuestLog[]
+  leaveRequests  LeaveRequest[]
+  entryExitLogs  EntryExitLog[]
 
   @@map("tenants")
 }
@@ -313,6 +344,7 @@ model Capex {
   amount     Decimal  @db.Decimal(10, 2)
   date       DateTime
   notes      String?
+  receiptUrl String?  @map("receipt_url")
   createdAt  DateTime @default(now()) @map("created_at")
 
   property Property? @relation(fields: [propertyId], references: [id])
@@ -394,4 +426,110 @@ model RentAgreementTemplate {
   property Property? @relation(fields: [propertyId], references: [id])
 
   @@map("rent_agreement_templates")
+}
+
+model GuestLog {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  propertyId    String    @map("property_id")
+  visitorName   String    @map("visitor_name")
+  visitorPhone  String?   @map("visitor_phone")
+  expectedIn    DateTime  @map("expected_in")
+  expectedOut   DateTime? @map("expected_out")
+  actualOut     DateTime? @map("actual_out")
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@map("guest_logs")
+}
+
+model LeaveRequest {
+  id           String      @id @default(uuid())
+  tenantId     String      @map("tenant_id")
+  fromDate     DateTime    @map("from_date")
+  toDate       DateTime    @map("to_date")
+  reason       String?
+  status       LeaveStatus @default(PENDING)
+  approvedBy   String?     @map("approved_by")
+  approvedAt   DateTime?   @map("approved_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("leave_requests")
+}
+
+model FoodMenuItem {
+  id         String    @id @default(uuid())
+  propertyId String    @map("property_id")
+  dayOfWeek  DayOfWeek @map("day_of_week")
+  mealType   MealType  @map("meal_type")
+  items      String
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@unique([propertyId, dayOfWeek, mealType])
+  @@map("food_menu_items")
+}
+
+// ─── Inquiries (prospective tenants) ──────────────────────────────────────────
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  VISIT_SCHEDULED
+  CONVERTED
+  DROPPED
+}
+
+model Inquiry {
+  id               String        @id @default(uuid())
+  name             String
+  phone            String
+  email            String?
+  propertyId       String?       @map("property_id")
+  bedPreference    String?       @map("bed_preference")
+  budget           Int?
+  inquiryDate      DateTime      @default(now()) @map("inquiry_date")
+  status           InquiryStatus @default(NEW)
+  notes            String?
+  assignedTo       String?       @map("assigned_to")
+  convertedTenantId String?      @unique @map("converted_tenant_id")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  property  Property? @relation(fields: [propertyId], references: [id])
+  assignee  User?     @relation("InquiryAssignee", fields: [assignedTo], references: [id])
+
+  @@map("inquiries")
+}
+
+// ─── Entry-Exit Log (daily physical check-in/out) ─────────────────────────────
+
+enum EntryExitDirection {
+  IN
+  OUT
+}
+
+model EntryExitLog {
+  id          String             @id @default(uuid())
+  tenantId    String             @map("tenant_id")
+  propertyId  String             @map("property_id")
+  direction   EntryExitDirection
+  loggedAt    DateTime           @default(now()) @map("logged_at")
+  loggedBy    String             @map("logged_by")
+  notes       String?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+  logger   User     @relation("EntryExitLogger", fields: [loggedBy], references: [id])
+
+  @@map("entry_exit_logs")
 }

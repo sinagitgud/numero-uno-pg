@@ -18,6 +18,13 @@ import { ticketRoutes } from './routes/tickets';
 import { dashboardRoutes } from './routes/dashboard';
 import { goalRoutes } from './routes/goals';
 import { uploadRoutes } from './routes/upload';
+import { notificationRoutes } from './routes/notifications';
+import { guestRoutes } from './routes/guests';
+import { leaveRoutes } from './routes/leaves';
+import { menuRoutes } from './routes/menu';
+import { inquiryRoutes } from './routes/inquiries';
+import { entryExitRoutes } from './routes/entryexit';
+import { startCronJobs } from './lib/cron';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,6 +69,12 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/guests', guestRoutes);
+app.use('/api/leaves', leaveRoutes);
+app.use('/api/menu', menuRoutes);
+app.use('/api/inquiries', inquiryRoutes);
+app.use('/api/entry-exit', entryExitRoutes);
 
 // ─── 404 handler ──────────────────────────────────────────────────────────────
 app.use((_req, res) => {
@@ -76,6 +89,8 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 app.listen(PORT, () => {
   console.log(`✅ Numero Uno PG backend running on port ${PORT}`);
+  // Start background cron jobs
+  startCronJobs();
 });
 
 export default app;

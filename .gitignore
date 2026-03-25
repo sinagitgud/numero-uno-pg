@@ -3,6 +3,8 @@ dist/
 build/
 .env
 .env.local
+.env.production
+.env.production.local
 *.log
 .DS_Store
 Thumbs.db
@@ -17,3 +19,7 @@ apps/backend/prisma/migrations/*.sql.bak
 
 # Generated
 apps/mobile/src/i18n/locales/generated/
+
+# Claude Code local settings (contains API keys)
+.claude/settings.local.json
+.gstack/
