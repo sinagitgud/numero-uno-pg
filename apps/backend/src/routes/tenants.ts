@@ -154,8 +154,8 @@ tenantRoutes.post('/', authenticate, salesOnly, async (req: AuthRequest, res: Re
           // When tenant later registers via the app, the firebaseUid gets linked
           user = await tx.user.create({
             data: {
-              firebaseUid: phone,
-              name,
+              firebaseUid: phone!,
+              name: name!,
               phone,
               role: 'TENANT',
               isActive: true,
