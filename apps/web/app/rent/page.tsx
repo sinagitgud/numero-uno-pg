@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ChevronLeft, MessageCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, MessageCircle, AlertTriangle, CheckCircle2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { SkeletonRow } from '@/components/shared/PageLoader';
@@ -38,6 +38,8 @@ export default function RentPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
   // Track last reminder sent time per invoice (client-side only)
   const [reminderSentAt, setReminderSentAt] = useState<Record<string, Date>>({});
 
@@ -52,6 +54,66 @@ export default function RentPage() {
     staleTime: 0,
     refetchInterval: 10_000,
   });
+
+  // Pending payment approvals (tenant self-reports awaiting staff approval)
+  interface PendingPayment {
+    id: string;
+    amount: number;
+    date: string;
+    mode: string;
+    notes: string | null;
+    invoice: {
+      id: string;
+      month: number;
+      year: number;
+      amountDue: number;
+      amountPaid: number;
+      tenant: {
+        user: { name: string; phone: string | null };
+        bed: { label: string; room: { number: string; property: { name: string; code: string } } };
+      };
+    };
+  }
+
+  const { data: pendingData } = useQuery<{ data: PendingPayment[] }>({
+    queryKey: ['payments-pending'],
+    queryFn: async () => {
+      const { data } = await api.get('/payments/pending');
+      return data;
+    },
+    staleTime: 0,
+    refetchInterval: 10_000,
+  });
+
+  const pendingPayments = pendingData?.data ?? [];
+
+  const approvePayment = async (paymentId: string) => {
+    setApprovingId(paymentId);
+    try {
+      await api.post(`/payments/${paymentId}/approve`);
+      toast.success('Payment approved ✓');
+      qc.invalidateQueries({ queryKey: ['payments-pending'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      qc.invalidateQueries({ queryKey: ['invoices-overdue'] });
+    } catch {
+      toast.error('Could not approve. Try again.');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const rejectPayment = async (paymentId: string) => {
+    setRejectingId(paymentId);
+    try {
+      await api.post(`/payments/${paymentId}/reject`);
+      toast.success('Payment rejected');
+      qc.invalidateQueries({ queryKey: ['payments-pending'] });
+    } catch {
+      toast.error('Could not reject. Try again.');
+    } finally {
+      setRejectingId(null);
+    }
+  };
 
   // Always fetch overdue separately for "Action needed" section (not affected by month filter)
   const { data: overdueData } = useQuery<{ data: InvoiceItem[] }>({
@@ -125,6 +187,57 @@ export default function RentPage() {
     <div>
       <Header title="Rent & Invoices" />
       <div className="px-4 py-4 space-y-4">
+
+        {/* PAYMENT APPROVALS — tenant self-reports awaiting approval */}
+        {pendingPayments.length > 0 && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-blue-200">
+              <ThumbsUp className="w-4 h-4 text-blue-500 shrink-0" />
+              <span className="text-sm font-semibold text-blue-700">
+                Payment approvals — {pendingPayments.length} pending
+              </span>
+            </div>
+            <div className="divide-y divide-blue-100">
+              {pendingPayments.map((p) => {
+                const isApproving = approvingId === p.id;
+                const isRejecting = rejectingId === p.id;
+                const busy = isApproving || isRejecting;
+                const MONTHS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return (
+                  <div key={p.id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{p.invoice.tenant.user.name}</p>
+                        <p className="text-xs text-blue-700">
+                          {p.invoice.tenant.bed.room.property.code} · {formatCurrency(p.amount)} · {p.mode} · {MONTHS[p.invoice.month]} {p.invoice.year}
+                        </p>
+                        {p.notes && <p className="text-[10px] text-muted-foreground mt-0.5">{p.notes}</p>}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => approvePayment(p.id)}
+                          disabled={busy}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5" />
+                          {isApproving ? 'Approving…' : 'Approve'}
+                        </button>
+                        <button
+                          onClick={() => rejectPayment(p.id)}
+                          disabled={busy}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-300 bg-white text-red-600 text-xs font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5" />
+                          {isRejecting ? 'Rejecting…' : 'Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ACTION NEEDED — overdue tenants across all months */}
         {overdueInvoices.length > 0 && (

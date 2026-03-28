@@ -57,6 +57,12 @@ enum PaymentMode {
   BANK_TRANSFER
 }
 
+enum PaymentStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
 enum ExpenseCategory {
   MANAGERS
   MARKETING
@@ -156,6 +162,7 @@ model Property {
   wifiDetails  String?       @map("wifi_details")
   houseRules   String?       @map("house_rules")
   mealSchedule String?       @map("meal_schedule")
+  upiQrUrl     String?       @map("upi_qr_url")
   isActive     Boolean       @default(true) @map("is_active")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
@@ -267,16 +274,18 @@ model Invoice {
 }
 
 model Payment {
-  id          String      @id @default(uuid())
-  invoiceId   String      @map("invoice_id")
-  amount      Decimal     @db.Decimal(10, 2)
+  id          String        @id @default(uuid())
+  invoiceId   String        @map("invoice_id")
+  amount      Decimal       @db.Decimal(10, 2)
   date        DateTime
   mode        PaymentMode
-  razorpayId  String?     @map("razorpay_id")
-  recordedBy  String      @map("recorded_by")
+  status      PaymentStatus @default(APPROVED) @map("status")
+  recordedBy  String        @map("recorded_by")
+  approvedBy  String?       @map("approved_by")
+  approvedAt  DateTime?     @map("approved_at")
   notes       String?
-  receiptUrl  String?     @map("receipt_url")
-  createdAt   DateTime    @default(now()) @map("created_at")
+  receiptUrl  String?       @map("receipt_url")
+  createdAt   DateTime      @default(now()) @map("created_at")
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 

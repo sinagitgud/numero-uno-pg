@@ -22,7 +22,7 @@ if (isR2Configured) {
 
 export const r2Available = !!s3;
 
-export type UploadFolder = 'aadhaar' | 'receipts' | 'agreements';
+export type UploadFolder = 'aadhaar' | 'receipts' | 'agreements' | 'qr';
 
 /**
  * Upload a buffer to Cloudflare R2 and return the public URL.

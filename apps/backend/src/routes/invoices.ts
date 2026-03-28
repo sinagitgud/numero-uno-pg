@@ -302,7 +302,14 @@ invoiceRoutes.post('/:id/whatsapp-reminder', authenticate, salesOnly, async (req
   try {
     const invoice = await prisma.invoice.findUnique({
       where: { id: req.params.id },
-      include: { tenant: { include: { user: { select: { name: true, phone: true } } } } },
+      include: {
+        tenant: {
+          include: {
+            user: { select: { name: true, phone: true } },
+            property: { select: { upiQrUrl: true } },
+          },
+        },
+      },
     });
     if (!invoice) return res.status(404).json({ success: false, error: 'Invoice not found' });
 
@@ -311,8 +318,9 @@ invoiceRoutes.post('/:id/whatsapp-reminder', authenticate, salesOnly, async (req
 
     const remaining = Number(invoice.amountDue) - Number(invoice.amountPaid);
     const daysOverdue = Math.max(0, Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24)));
+    const qrImageUrl = invoice.tenant.property?.upiQrUrl ?? null;
 
-    const ok = await sendOverdueReminder(phone, invoice.tenant.user.name, remaining, invoice.month, invoice.year, daysOverdue);
+    const ok = await sendOverdueReminder(phone, invoice.tenant.user.name, remaining, invoice.month, invoice.year, daysOverdue, qrImageUrl);
     if (!ok) return res.status(500).json({ success: false, error: 'WhatsApp send failed' });
 
     return res.json({ success: true, message: 'Reminder sent' });

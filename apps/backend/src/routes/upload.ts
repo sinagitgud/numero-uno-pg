@@ -51,6 +51,22 @@ uploadRoutes.post('/aadhaar', authenticate, upload.single('file'), async (req: A
 });
 
 /**
+ * POST /api/upload/qr
+ * Upload property UPI QR code image → store in R2 → return URL.
+ */
+uploadRoutes.post('/qr', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+
+  try {
+    const url = await uploadToR2(req.file.buffer, req.file.mimetype, 'qr');
+    return res.json({ success: true, data: { url, r2Active: r2Available } });
+  } catch (err) {
+    console.error('[upload/qr]', err);
+    return res.status(500).json({ success: false, error: 'Upload failed' });
+  }
+});
+
+/**
  * POST /api/upload/receipt
  * Upload expense or payment receipt → store in R2 → return URL.
  */

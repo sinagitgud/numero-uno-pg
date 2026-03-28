@@ -30,10 +30,10 @@ propertyRoutes.get('/:id', authenticate, staffOnly, async (req: AuthRequest, res
 
 // POST /api/properties — create (owner only)
 propertyRoutes.post('/', authenticate, ownerOnly, async (req: AuthRequest, res: Response) => {
-  const { name, code, type, ownership, address, wifiDetails, houseRules, mealSchedule } = req.body;
+  const { name, code, type, ownership, address, wifiDetails, houseRules, mealSchedule, upiQrUrl } = req.body;
   try {
     const property = await prisma.property.create({
-      data: { name, code, type, ownership, address, wifiDetails, houseRules, mealSchedule },
+      data: { name, code, type, ownership, address, wifiDetails, houseRules, mealSchedule, upiQrUrl },
     });
     return res.status(201).json({ success: true, data: property });
   } catch (err: any) {
@@ -44,11 +44,11 @@ propertyRoutes.post('/', authenticate, ownerOnly, async (req: AuthRequest, res: 
 
 // PATCH /api/properties/:id — update (owner only)
 propertyRoutes.patch('/:id', authenticate, ownerOnly, async (req: AuthRequest, res: Response) => {
-  const { name, address, wifiDetails, houseRules, mealSchedule } = req.body;
+  const { name, address, wifiDetails, houseRules, mealSchedule, upiQrUrl } = req.body;
   try {
     const property = await prisma.property.update({
       where: { id: req.params.id },
-      data: { name, address, wifiDetails, houseRules, mealSchedule },
+      data: { name, address, wifiDetails, houseRules, mealSchedule, upiQrUrl },
     });
     return res.json({ success: true, data: property });
   } catch {
