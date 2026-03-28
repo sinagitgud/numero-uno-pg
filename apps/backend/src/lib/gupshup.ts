@@ -158,6 +158,16 @@ export async function sendOverdueReminder(
   return sendWhatsApp(phone, caption);
 }
 
+/** Receipt download link sent after payment approval */
+export async function sendPaymentReceiptLink(
+  phone: string, name: string, month: number, year: number, receiptUrl: string,
+): Promise<boolean> {
+  const msg =
+    `Hi ${name}! Your rent receipt for ${MONTHS[month]} ${year} is ready. ` +
+    `Download it here: ${receiptUrl} — Numero Uno PG`;
+  return sendWhatsApp(phone, msg);
+}
+
 /** Welcome message when a new tenant is onboarded */
 export async function sendWelcomeMessage(
   phone: string, name: string, propertyName: string, room: string, bed: string

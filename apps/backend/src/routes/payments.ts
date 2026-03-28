@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { salesOnly, tenantOnly } from '../middleware/rbac';
-import { sendPaymentReceipt } from '../lib/gupshup';
+import { sendPaymentReceiptLink } from '../lib/gupshup';
+import { generateReceiptPdf } from '../lib/receipt';
+import { uploadToR2 } from '../lib/r2';
 
 const RecordPaymentSchema = z.object({
   invoiceId: z.string().min(1),
@@ -23,6 +25,17 @@ const SelfReportSchema = z.object({
 });
 
 export const paymentRoutes = Router();
+
+/** Fire-and-forget: generate PDF receipt, upload to R2, send WhatsApp link. */
+async function sendReceiptLink(invoiceId: string, phone: string, name: string, month: number, year: number) {
+  try {
+    const buffer = await generateReceiptPdf(invoiceId);
+    const url = await uploadToR2(buffer, 'application/pdf', 'receipts');
+    await sendPaymentReceiptLink(phone, name, month, year, url);
+  } catch (err) {
+    console.error('[receipt-link]', err);
+  }
+}
 
 // ─── Manual payment recorded by staff (APPROVED immediately) ─────────────────
 
@@ -64,15 +77,10 @@ paymentRoutes.post('/', authenticate, salesOnly, async (req: AuthRequest, res: R
       }),
     ]);
 
-    // Send WhatsApp receipt on full payment
-    if (newStatus === 'PAID') {
-      const phone = invoice.tenant.user.phone;
-      if (phone) {
-        sendPaymentReceipt(
-          phone, invoice.tenant.user.name, Number(amount),
-          invoice.month, invoice.year, mode
-        ).catch(() => {});
-      }
+    // Fire-and-forget: send PDF receipt link via WhatsApp
+    const phone = invoice.tenant.user.phone;
+    if (phone) {
+      sendReceiptLink(invoiceId, phone, invoice.tenant.user.name, invoice.month, invoice.year);
     }
 
     return res.status(201).json({ success: true, data: payment });
@@ -187,13 +195,10 @@ paymentRoutes.post('/:id/approve', authenticate, salesOnly, async (req: AuthRequ
       }),
     ]);
 
-    // Send WhatsApp receipt on full payment
+    // Fire-and-forget: send PDF receipt link via WhatsApp
     const phone = invoice.tenant.user.phone;
-    if (phone && newInvoiceStatus === 'PAID') {
-      sendPaymentReceipt(
-        phone, invoice.tenant.user.name, Number(payment.amount),
-        invoice.month, invoice.year, payment.mode
-      ).catch(() => {});
+    if (phone) {
+      sendReceiptLink(invoice.id, phone, invoice.tenant.user.name, invoice.month, invoice.year);
     }
 
     return res.json({ success: true });
