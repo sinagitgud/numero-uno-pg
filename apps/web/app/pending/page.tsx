@@ -30,7 +30,8 @@ export default function PendingApprovalPage() {
 
       if (!authUser?.isPendingApproval) {
         toast.success('Your account has been approved!');
-        router.replace('/tenant');
+        const dest = (authUser as any)?.role === 'TENANT' ? '/tenant' : '/dashboard';
+        router.replace(dest);
       } else {
         toast('Still waiting for approval…', { icon: '⏳' });
       }
