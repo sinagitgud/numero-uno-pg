@@ -172,3 +172,22 @@ authRoutes.post('/approve/:userId', authenticate, async (req: AuthRequest, res: 
     return res.status(500).json({ success: false, error: 'Failed to approve user' });
   }
 });
+
+/**
+ * POST /api/auth/reject/:userId
+ * Deletes a pending (isActive=false) TENANT user who has no tenant record yet.
+ */
+authRoutes.post('/reject/:userId', authenticate, async (req: AuthRequest, res: Response) => {
+  if (!['OWNER', 'SALES_MANAGER'].includes(req.user!.role)) {
+    return res.status(403).json({ success: false, error: 'Access denied' });
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+    if (user.isActive) return res.status(400).json({ success: false, error: 'Cannot reject an active user' });
+    await prisma.user.delete({ where: { id: req.params.userId } });
+    return res.json({ success: true, message: 'User rejected and removed' });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Failed to reject user' });
+  }
+});
