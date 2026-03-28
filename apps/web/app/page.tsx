@@ -9,7 +9,8 @@ export default function Home() {
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
-    router.replace(user ? '/dashboard' : '/login');
+    if (!user) { router.replace('/login'); return; }
+    router.replace(user.role === 'TENANT' ? '/tenant' : '/dashboard');
   }, [user, router]);
 
   return null;

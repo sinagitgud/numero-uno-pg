@@ -1,16 +1,11 @@
 import {
-  signInWithEmailAndPassword,
   signInWithPhoneNumber,
   RecaptchaVerifier,
-  sendSignInLinkToEmail,
-  isSignInWithEmailLink,
-  signInWithEmailLink,
   signOut,
   onIdTokenChanged,
   browserSessionPersistence,
   browserLocalPersistence,
   setPersistence,
-  type Auth,
 } from 'firebase/auth';
 import { firebaseAuth } from './firebase';
 import { api } from './api';
@@ -20,7 +15,6 @@ import type { AuthUser } from '@numero-uno-pg/shared';
 // ── D15: Token auto-refresh via onIdTokenChanged (not setInterval) ───────────
 // Call this once in the root layout. Returns an unsubscribe function.
 export function initTokenRefresh(): () => void {
-  if (!firebaseAuth) return () => {};
   return onIdTokenChanged(firebaseAuth, async (user) => {
     if (user) {
       const token = await user.getIdToken();
@@ -38,26 +32,6 @@ async function registerWithBackend(token: string): Promise<AuthUser> {
   );
   if (!data.success) throw new Error('Registration failed');
   return data.data;
-}
-
-// ── Email OTP (magic link) login ─────────────────────────────────────────────
-export async function sendEmailOtp(email: string): Promise<void> {
-  await sendSignInLinkToEmail(firebaseAuth, email, {
-    url: `${window.location.origin}/login?finish=1`,
-    handleCodeInApp: true,
-  });
-  localStorage.setItem('emailForSignIn', email);
-}
-
-export async function completeEmailOtp(emailLink: string, rememberMe = false): Promise<AuthUser> {
-  const email = localStorage.getItem('emailForSignIn') || '';
-  await setPersistence(firebaseAuth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
-  const result = await signInWithEmailLink(firebaseAuth, email, emailLink);
-  const token = await result.user.getIdToken();
-  const authUser = await registerWithBackend(token);
-  useAuthStore.getState().setAuth(authUser, token);
-  localStorage.removeItem('emailForSignIn');
-  return authUser;
 }
 
 // ── Phone OTP login ──────────────────────────────────────────────────────────
