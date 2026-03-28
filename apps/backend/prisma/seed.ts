@@ -266,7 +266,7 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { phone: '+919654999280' },
-    update: { role: 'OWNER', isActive: true },
+    update: { name: 'Shikha Nayyar', role: 'OWNER', isActive: true },
     create: {
       firebaseUid: 'seed-owner-shikha',
       name: 'Shikha Nayyar',
@@ -278,7 +278,7 @@ async function main() {
 
   await prisma.user.upsert({
     where: { phone: '+919871608064' },
-    update: { role: 'OWNER', isActive: true },
+    update: { name: 'Siddharth Nayyar', role: 'OWNER', isActive: true },
     create: {
       firebaseUid: 'seed-owner-siddharth',
       name: 'Siddharth Nayyar',
@@ -288,9 +288,9 @@ async function main() {
     },
   });
 
-  const salesManager = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { phone: '+918447361034' },
-    update: { role: 'SALES_MANAGER', isActive: true },
+    update: { name: 'Priya', role: 'SALES_MANAGER', isActive: true },
     create: {
       firebaseUid: 'seed-sales-priya',
       name: 'Priya',
@@ -302,7 +302,7 @@ async function main() {
 
   await prisma.user.upsert({
     where: { phone: '+919354601080' },
-    update: { role: 'OPS_MANAGER', isActive: true },
+    update: { name: 'Girish Singh', role: 'OPS_MANAGER', isActive: true },
     create: {
       firebaseUid: 'seed-ops-girish',
       name: 'Girish Singh',
