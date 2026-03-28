@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Wifi, BookOpen, UtensilsCrossed, Building2 } from 'lucide-react';
+import { Wifi, BookOpen, UtensilsCrossed, Building2, Copy, CheckCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { SkeletonCard } from '@/components/shared/PageLoader';
@@ -40,6 +41,13 @@ const MEAL_ORDER = ['BREAKFAST','LUNCH','DINNER'];
 const MEAL_LABELS: Record<string, string> = { BREAKFAST:'Breakfast', LUNCH:'Lunch', DINNER:'Dinner' };
 
 export default function TenantInfoPage() {
+  const [wifiCopied, setWifiCopied] = useState(false);
+
+  const copyWifi = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
+    setWifiCopied(true);
+    setTimeout(() => setWifiCopied(false), 2000);
+  };
   const { data: meData, isLoading: meLoading } = useQuery({
     queryKey: ['tenant-me'],
     queryFn: () => api.get<{ success: boolean; data: TenantProfile }>('/auth/me').then(r => r.data.data),
@@ -47,17 +55,15 @@ export default function TenantInfoPage() {
 
   const property = meData?.tenant?.bed?.room?.property;
 
+  const propertyId = (meData as any)?.tenant?.propertyId;
+
   const { data: menuData, isLoading: menuLoading } = useQuery({
-    queryKey: ['tenant-menu', property?.name],
+    queryKey: ['tenant-menu', propertyId],
     queryFn: async () => {
-      // Get propertyId from the tenancy info
-      const meRes = await api.get<{ success: boolean; data: any }>('/auth/me');
-      const propertyId = meRes.data.data?.tenant?.propertyId;
-      if (!propertyId) return [];
       const menuRes = await api.get<{ success: boolean; data: FoodMenuItem[] }>(`/menu/${propertyId}`);
       return menuRes.data.data ?? [];
     },
-    enabled: !!meData?.tenant,
+    enabled: !!propertyId,
   });
 
   if (meLoading) return (
@@ -113,9 +119,18 @@ export default function TenantInfoPage() {
         {/* WiFi */}
         {property.wifiDetails && (
           <div className="rounded-xl border p-4 space-y-2">
-            <div className="flex items-center gap-2 font-semibold">
-              <Wifi className="w-4 h-4 text-primary" />
-              WiFi Details
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold">
+                <Wifi className="w-4 h-4 text-primary" />
+                WiFi Details
+              </div>
+              <button
+                onClick={() => copyWifi(property.wifiDetails!)}
+                className="flex items-center gap-1.5 text-xs text-primary font-medium px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
+              >
+                {wifiCopied ? <CheckCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {wifiCopied ? 'Copied!' : 'Copy'}
+              </button>
             </div>
             <p className="text-sm whitespace-pre-wrap">{property.wifiDetails}</p>
           </div>
@@ -128,7 +143,7 @@ export default function TenantInfoPage() {
               <BookOpen className="w-4 h-4 text-primary" />
               House Rules
             </div>
-            <p className="text-sm whitespace-pre-wrap text-muted-foreground">{property.houseRules}</p>
+            <p className="text-sm whitespace-pre-wrap text-foreground">{property.houseRules}</p>
           </div>
         )}
 

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ChevronLeft, MessageCircle, AlertTriangle, CheckCircle2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ChevronRight, ChevronLeft, MessageCircle, AlertTriangle, CheckCircle2, ThumbsUp, ThumbsDown, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { SkeletonRow } from '@/components/shared/PageLoader';
@@ -40,6 +40,7 @@ export default function RentPage() {
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [markPaidForm, setMarkPaidForm] = useState<{ invoiceId: string; mode: string; ref: string } | null>(null);
   // Track last reminder sent time per invoice (client-side only)
   const [reminderSentAt, setReminderSentAt] = useState<Record<string, Date>>({});
 
@@ -52,7 +53,7 @@ export default function RentPage() {
       return data;
     },
     staleTime: 0,
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   // Pending payment approvals (tenant self-reports awaiting staff approval)
@@ -82,7 +83,7 @@ export default function RentPage() {
       return data;
     },
     staleTime: 0,
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   const pendingPayments = pendingData?.data ?? [];
@@ -125,7 +126,7 @@ export default function RentPage() {
       return data;
     },
     staleTime: 0,
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   const invoices = data?.data ?? [];
@@ -153,16 +154,21 @@ export default function RentPage() {
   };
 
   const markPaid = async (invoice: InvoiceItem) => {
+    if (!markPaidForm || markPaidForm.invoiceId !== invoice.id) {
+      setMarkPaidForm({ invoiceId: invoice.id, mode: 'CASH', ref: '' });
+      return;
+    }
     setMarkingPaid(invoice.id);
     try {
       await api.post('/payments', {
         invoiceId: invoice.id,
         amount: Number(invoice.amountDue) - Number(invoice.amountPaid),
         date: new Date().toISOString().split('T')[0],
-        mode: 'CASH',
-        notes: 'Marked paid manually by staff',
+        mode: markPaidForm.mode,
+        notes: markPaidForm.ref || 'Marked paid manually by staff',
       });
       toast.success('Marked as paid ✓');
+      setMarkPaidForm(null);
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['invoices-overdue'] });
     } catch {
@@ -181,6 +187,9 @@ export default function RentPage() {
 
   const overdueTotal = invoices
     .filter((i) => i.status === 'OVERDUE' || i.status === 'PENDING')
+    .reduce((sum, i) => sum + (Number(i.amountDue) - Number(i.amountPaid)), 0);
+
+  const allOutstandingTotal = overdueInvoices
     .reduce((sum, i) => sum + (Number(i.amountDue) - Number(i.amountPaid)), 0);
 
   return (
@@ -259,7 +268,7 @@ export default function RentPage() {
                 const isMarking = markingPaid === inv.id;
 
                 return (
-                  <div key={inv.id} className="px-4 py-3">
+                  <div key={inv.id} className="px-4 py-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{inv.tenant.user.name}</p>
@@ -293,6 +302,38 @@ export default function RentPage() {
                         </button>
                       </div>
                     </div>
+                    {/* Inline mark-paid confirmation */}
+                    {markPaidForm?.invoiceId === inv.id && (
+                      <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold">Confirm Payment</p>
+                          <button onClick={() => setMarkPaidForm(null)}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        </div>
+                        <select
+                          value={markPaidForm.mode}
+                          onChange={(e) => setMarkPaidForm((f) => f ? { ...f, mode: e.target.value } : f)}
+                          className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary bg-background"
+                        >
+                          {['CASH', 'UPI', 'CARD', 'BANK_TRANSFER'].map((m) => (
+                            <option key={m} value={m}>{m.replace('_', ' ')}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Reference / UTR (optional)"
+                          value={markPaidForm.ref}
+                          onChange={(e) => setMarkPaidForm((f) => f ? { ...f, ref: e.target.value } : f)}
+                          className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary bg-background"
+                        />
+                        <button
+                          onClick={() => markPaid(inv)}
+                          disabled={isMarking}
+                          className="w-full bg-primary text-primary-foreground rounded-lg py-2 text-xs font-semibold disabled:opacity-60"
+                        >
+                          {isMarking ? 'Saving…' : 'Confirm Paid'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -300,12 +341,19 @@ export default function RentPage() {
           </div>
         )}
 
-        {/* Overdue total banner (for current month filter) */}
-        {overdueTotal > 0 && (
-          <div className="rounded-xl bg-orange-50 border border-orange-200 px-4 py-3 text-center">
-            <p className="text-sm text-orange-700 font-medium">
-              Outstanding this month: {formatCurrency(overdueTotal)}
-            </p>
+        {/* Overdue total banner */}
+        {(overdueTotal > 0 || allOutstandingTotal > 0) && (
+          <div className="rounded-xl bg-orange-50 border border-orange-200 px-4 py-3">
+            <div className="flex justify-between text-sm text-orange-700 font-medium">
+              <span>Outstanding ({monthLabel(month, year)})</span>
+              <span>{formatCurrency(overdueTotal)}</span>
+            </div>
+            {allOutstandingTotal !== overdueTotal && (
+              <div className="flex justify-between text-xs text-orange-600 mt-1">
+                <span>All outstanding</span>
+                <span>{formatCurrency(allOutstandingTotal)}</span>
+              </div>
+            )}
           </div>
         )}
 

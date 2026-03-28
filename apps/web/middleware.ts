@@ -13,10 +13,25 @@ const STAFF_PATHS = [
 ];
 
 // Routes only tenants can access
-const TENANT_PATHS = ['/my'];
+const TENANT_PATHS = ['/tenant', '/my'];
+
+// Legacy /my/* → /tenant/* redirect map
+const MY_REDIRECT_MAP: Record<string, string> = {
+  '/my/home':    '/tenant',
+  '/my/rent':    '/tenant/rent',
+  '/my/tickets': '/tenant/support',
+  '/my/guests':  '/tenant/guests',
+  '/my/leave':   '/tenant/leave',
+};
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Redirect /my/* → /tenant/*
+  if (pathname.startsWith('/my')) {
+    const dest = MY_REDIRECT_MAP[pathname] ?? `/tenant${pathname.slice(3) || ''}`;
+    return NextResponse.redirect(new URL(dest, request.url));
+  }
 
   // Allow public paths and Next.js internals
   if (
@@ -46,7 +61,7 @@ export function middleware(request: NextRequest) {
 
   // Tenant trying to access a staff route
   if (isTenant && isStaffRoute) {
-    return NextResponse.redirect(new URL('/my/home', request.url));
+    return NextResponse.redirect(new URL('/tenant', request.url));
   }
 
   // Staff/Owner trying to access a tenant route

@@ -33,7 +33,7 @@ const STATUS_COLOR: Record<string, string> = {
 export default function TenantsPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('ACTIVE');
 
   const { data, isLoading, error } = useQuery<{ data: TenantItem[]; total: number }>({
     queryKey: ['tenants', statusFilter],
@@ -87,7 +87,7 @@ export default function TenantsPage() {
           {isLoading ? (
             [1,2,3,4,5].map(i => <SkeletonRow key={i} cols={3} />)
           ) : error ? (
-            <p className="px-4 py-6 text-sm text-destructive text-center">Failed to load tenants. Pull to refresh.</p>
+            <p className="px-4 py-6 text-sm text-destructive text-center">Failed to load tenants. Tap to retry.</p>
           ) : tenants.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground text-center">
               {search ? 'No matches found.' : 'No tenants yet. Tap + to onboard your first tenant.'}
@@ -107,7 +107,7 @@ export default function TenantsPage() {
                   <p className="text-xs text-muted-foreground">Since {formatDate(t.checkIn)}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[t.status]}`}>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[t.status]}`}>
                     {STATUS_LABEL[t.status]}
                   </span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />

@@ -341,7 +341,7 @@ export default function GoalsPage() {
                     )}
                   </div>
                 ))}
-                <p className="text-xs text-muted-foreground">Rate = fraction of total collected (e.g. 0.02 = 2%)</p>
+                <p className="text-xs text-muted-foreground">Rate = fraction of total collected. e.g. 0.08 for 8%</p>
               </div>
             </div>
 

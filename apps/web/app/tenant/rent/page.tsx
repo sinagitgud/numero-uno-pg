@@ -50,7 +50,7 @@ export default function TenantRentPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['tenant-invoices'],
     queryFn: () => api.get<{ success: boolean; data: Invoice[] }>('/invoices/my').then(r => r.data.data),
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
   });
 
   const invoices = data ?? [];

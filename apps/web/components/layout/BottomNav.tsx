@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Users, CreditCard, Ticket, Building2,
   Receipt, UserCheck, CalendarOff, UserPlus, UserCog,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { api } from '@/lib/api';
 import type { UserRole } from '@numero-uno-pg/shared';
 
 interface NavItem {
@@ -44,10 +46,10 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const PRIMARY_TABS: Record<UserRole, string[]> = {
-  OWNER:         ['/dashboard', '/tenants', '/rent', '/tickets'],
+  OWNER:         ['/dashboard', '/tenants', '/rent', '/inquiries'],
   SALES_MANAGER: ['/tenants', '/rent', '/tickets', '/inquiries'],
   OPS_MANAGER:   ['/tickets', '/properties', '/expenses', '/guests'],
-  TENANT:        ['/tenant', '/tenant/rent', '/tenant/support', '/tenant/info', '/tenant/guests', '/tenant/leave'],
+  TENANT:        ['/tenant', '/tenant/rent', '/tenant/support', '/tenant/info'],
 };
 
 export function BottomNav() {
@@ -55,6 +57,17 @@ export function BottomNav() {
   const router = useRouter();
   const role = useAuthStore((s) => s.user?.role);
   const [showMore, setShowMore] = useState(false);
+
+  const { data: pendingLeavesData } = useQuery<{ data: { total?: number; data?: unknown[] } }>({
+    queryKey: ['more-badge-leaves'],
+    queryFn: async () => {
+      const { data } = await api.get('/leaves', { params: { status: 'PENDING', limit: 1 } });
+      return data;
+    },
+    enabled: role === 'OWNER' || role === 'SALES_MANAGER',
+    refetchInterval: 60_000,
+  });
+  const pendingLeavesTotal = (pendingLeavesData?.data as any)?.data?.length ?? 0;
 
   if (!role) return null;
 
@@ -77,7 +90,7 @@ export function BottomNav() {
           <div className="fixed bottom-16 left-0 right-0 z-50 max-w-md mx-auto bg-background border-t rounded-t-2xl shadow-xl px-4 pt-4 pb-6">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-semibold">More</p>
-              <button onClick={() => setShowMore(false)} className="p-1 rounded-md hover:bg-muted">
+              <button onClick={() => setShowMore(false)} className="p-1 rounded-md hover:bg-muted" aria-label="Close menu">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
@@ -89,7 +102,7 @@ export function BottomNav() {
                     key={item.href}
                     onClick={() => { router.push(item.href); setShowMore(false); }}
                     className={cn(
-                      'flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl text-[10px] font-medium transition-colors',
+                      'flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-medium transition-colors',
                       active
                         ? 'bg-primary/10 text-primary'
                         : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -128,11 +141,16 @@ export function BottomNav() {
           <button
             onClick={() => setShowMore((v) => !v)}
             className={cn(
-              'flex flex-col items-center justify-center flex-1 gap-0.5 text-[10px] transition-colors',
+              'flex flex-col items-center justify-center flex-1 gap-0.5 text-xs transition-colors relative',
               moreActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <MoreHorizontal className="w-5 h-5" />
+            <span className="relative">
+              <MoreHorizontal className="w-5 h-5" />
+              {pendingLeavesTotal > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+              )}
+            </span>
             <span>More</span>
           </button>
         )}

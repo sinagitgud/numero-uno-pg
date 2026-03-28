@@ -72,6 +72,9 @@ export default function LeavesPage() {
               <div className="flex items-start justify-between">
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium">{l.tenant.user.name}</p>
+                  {l.tenant.user.phone && (
+                    <a href={`tel:${l.tenant.user.phone}`} className="text-xs text-primary underline">{l.tenant.user.phone}</a>
+                  )}
                   <p className="text-xs text-muted-foreground">{formatDate(l.fromDate)} → {formatDate(l.toDate)}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{l.reason}</p>
                 </div>

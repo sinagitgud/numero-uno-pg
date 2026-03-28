@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Phone, ChevronRight, FileText, Download, AlertTriangle, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Phone, ChevronRight, FileText, LogOut, AlertTriangle, Loader2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { SkeletonCard } from '@/components/shared/PageLoader';
 import { formatCurrency, formatDate, monthLabel } from '@/lib/utils';
@@ -111,8 +111,12 @@ export default function TenantDetailPage() {
             <span>{formatDate(tenant.checkIn)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Security Deposit</span>
-            <span>{formatCurrency(tenant.securityReceived)} / {formatCurrency(tenant.securityExpected)}</span>
+            <span className="text-muted-foreground">Security Received</span>
+            <span>{formatCurrency(tenant.securityReceived)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Security Expected</span>
+            <span>{formatCurrency(tenant.securityExpected)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Status</span>
@@ -170,7 +174,7 @@ export default function TenantDetailPage() {
                   <p className="text-xs text-muted-foreground">{formatCurrency(inv.amountPaid)} / {formatCurrency(inv.amountDue)}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-semibold ${STATUS_COLOR[inv.status] || ''}`}>{inv.status}</span>
+                  <span className={`text-xs font-semibold ${STATUS_COLOR[inv.status] || ''}`}>{inv.status.replace(/_/g, ' ')}</span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </div>
               </button>
@@ -217,7 +221,7 @@ export default function TenantDetailPage() {
                 onClick={() => setShowCheckout(true)}
                 className="w-full flex items-center justify-center gap-2 border border-red-300 text-red-700 bg-red-50 rounded-xl py-3 text-sm font-medium"
               >
-                <Download className="w-4 h-4" />
+                <LogOut className="w-4 h-4" />
                 Check Out Tenant
               </button>
             ) : (

@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Home, CreditCard, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import Link from 'next/link';
+import { CreditCard, AlertCircle, CheckCircle2, Clock, UserCheck, CalendarOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { SkeletonCard } from '@/components/shared/PageLoader';
@@ -105,8 +106,8 @@ export default function TenantHomePage() {
 
         {tenant && (
           <>
-            {/* Rent summary */}
-            <div className="rounded-xl border p-4 space-y-3">
+            {/* Rent summary — tappable */}
+            <Link href="/tenant/rent" className="block rounded-xl border p-4 space-y-3 hover:bg-muted/30 transition-colors cursor-pointer">
               <div className="flex items-center gap-2 font-semibold">
                 <CreditCard className="w-4 h-4 text-primary" />
                 Rent
@@ -135,41 +136,32 @@ export default function TenantHomePage() {
                   </span>
                 </div>
               )}
-            </div>
+            </Link>
 
-            {/* Stay details */}
-            <div className="rounded-xl border p-4 space-y-3">
-              <div className="flex items-center gap-2 font-semibold">
-                <Home className="w-4 h-4 text-primary" />
-                Stay Details
-              </div>
-              <div className="space-y-2 text-sm">
-                <Row label="Property" value={tenant.bed.room.property.name} />
-                <Row label="Address" value={tenant.bed.room.property.address} />
-                <Row label="Room" value={`Room ${tenant.bed.room.number}${tenant.bed.room.isAc ? ' (AC)' : ''}`} />
-                <Row label="Bed" value={tenant.bed.label} />
-                <Row label="Check-in" value={new Date(tenant.checkIn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
-                {tenant.discount > 0 && <Row label="Discount" value={`${tenant.discount}%`} />}
-                {Number(tenant.securityExpected) > 0 && (
-                  <Row
-                    label="Security Deposit"
-                    value={`${formatCurrency(tenant.securityReceived)} / ${formatCurrency(tenant.securityExpected)}`}
-                  />
-                )}
-              </div>
+            {/* Quick actions */}
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/tenant/guests" className="flex items-center gap-3 rounded-xl border p-3.5 hover:bg-muted/30 transition-colors">
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <UserCheck className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Guests</p>
+                  <p className="text-xs text-muted-foreground">Add visitor</p>
+                </div>
+              </Link>
+              <Link href="/tenant/leave" className="flex items-center gap-3 rounded-xl border p-3.5 hover:bg-muted/30 transition-colors">
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <CalendarOff className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Leave</p>
+                  <p className="text-xs text-muted-foreground">Request leave</p>
+                </div>
+              </Link>
             </div>
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="font-medium text-right">{value}</span>
     </div>
   );
 }

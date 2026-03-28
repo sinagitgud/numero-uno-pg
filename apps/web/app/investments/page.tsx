@@ -113,7 +113,7 @@ export default function InvestmentsPage() {
                     <p className="text-sm font-medium text-green-600">{formatCurrency(s.returned)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Balance</p>
+                    <p className="text-xs text-muted-foreground">Still to Return</p>
                     <p className={`text-sm font-bold ${s.balance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                       {formatCurrency(s.balance)}
                     </p>

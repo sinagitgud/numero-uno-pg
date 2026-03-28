@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronUp, MessageCircle, Send, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { SkeletonCard } from '@/components/shared/PageLoader';
@@ -48,6 +48,8 @@ export default function TenantSupportPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [category, setCategory] = useState('GENERAL');
   const [description, setDescription] = useState('');
+  const [replyText, setReplyText] = useState<Record<string, string>>({});
+  const [sendingReply, setSendingReply] = useState<Record<string, boolean>>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ['tenant-tickets'],
@@ -65,6 +67,22 @@ export default function TenantSupportPage() {
     },
     onError: () => toast.error('Failed to submit. Try again.'),
   });
+
+  const addReply = async (ticketId: string) => {
+    const msg = replyText[ticketId]?.trim();
+    if (!msg) return;
+    setSendingReply((s) => ({ ...s, [ticketId]: true }));
+    try {
+      await api.post(`/tickets/${ticketId}/comments`, { message: msg });
+      qc.invalidateQueries({ queryKey: ['tenant-tickets'] });
+      setReplyText((r) => ({ ...r, [ticketId]: '' }));
+      toast.success('Reply sent!');
+    } catch {
+      toast.error('Failed to send reply.');
+    } finally {
+      setSendingReply((s) => ({ ...s, [ticketId]: false }));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,7 +155,9 @@ export default function TenantSupportPage() {
         )}
 
         {tickets.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">No requests yet</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            No requests yet. Having an issue? Tap &lsquo;New Request&rsquo; above.
+          </div>
         ) : (
           tickets.map(ticket => {
             const isExpanded = expandedId === ticket.id;
@@ -171,17 +191,40 @@ export default function TenantSupportPage() {
                   </div>
                 </button>
 
-                {isExpanded && ticket.comments.length > 0 && (
+                {isExpanded && (
                   <div className="px-4 pb-4 border-t pt-3 space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Updates</p>
-                    {ticket.comments.map(c => (
-                      <div key={c.id} className={`rounded-lg p-3 text-sm ${c.user.role === 'TENANT' ? 'bg-muted ml-4' : 'bg-primary/5 mr-4'}`}>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">
-                          {c.user.name} · {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                        </p>
-                        <p>{c.message}</p>
+                    {ticket.comments.length > 0 && (
+                      <>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Updates</p>
+                        {ticket.comments.map(c => (
+                          <div key={c.id} className={`rounded-lg p-3 text-sm ${c.user.role === 'TENANT' ? 'bg-muted ml-4' : 'bg-primary/5 mr-4'}`}>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">
+                              {c.user.name} · {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            </p>
+                            <p>{c.message}</p>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {/* Tenant reply input */}
+                    {ticket.status !== 'CLOSED' && ticket.status !== 'RESOLVED' && (
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          value={replyText[ticket.id] ?? ''}
+                          onChange={(e) => setReplyText((r) => ({ ...r, [ticket.id]: e.target.value }))}
+                          placeholder="Add a reply…"
+                          className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary bg-background"
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addReply(ticket.id); } }}
+                        />
+                        <button
+                          onClick={() => addReply(ticket.id)}
+                          disabled={sendingReply[ticket.id] || !replyText[ticket.id]?.trim()}
+                          className="p-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50"
+                        >
+                          {sendingReply[ticket.id] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        </button>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>

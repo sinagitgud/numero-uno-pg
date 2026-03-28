@@ -36,7 +36,12 @@ export function Header({ title }: HeaderProps) {
     <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b px-4 py-3 flex items-center justify-between">
       <h1 className="font-semibold text-base truncate">{title}</h1>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground hidden sm:block">{user?.name}</span>
+        {/* Initials avatar — always visible */}
+        {user?.name && (
+          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm flex items-center justify-center select-none">
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+        )}
         {isStaff && pendingCount > 0 && (
           <button
             onClick={() => router.push('/approvals')}
@@ -51,7 +56,7 @@ export function Header({ title }: HeaderProps) {
         )}
         <button
           onClick={handleLogout}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          className="p-3 rounded-md hover:bg-muted transition-colors"
           aria-label="Logout"
         >
           <LogOut className="w-4 h-4 text-muted-foreground" />

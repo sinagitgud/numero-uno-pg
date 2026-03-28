@@ -40,8 +40,8 @@ export default function TicketsPage() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [comment, setComment] = useState('');
-  const [sendingComment, setSendingComment] = useState(false);
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [sendingComment, setSendingComment] = useState<Record<string, boolean>>({});
 
   const { data, isLoading, error } = useQuery<{ data: TicketItem[] }>({
     queryKey: ['tickets', statusFilter],
@@ -69,17 +69,18 @@ export default function TicketsPage() {
   });
 
   const addComment = async (ticketId: string) => {
-    if (!comment.trim()) return;
-    setSendingComment(true);
+    const msg = comments[ticketId]?.trim();
+    if (!msg) return;
+    setSendingComment((s) => ({ ...s, [ticketId]: true }));
     try {
-      await api.post(`/tickets/${ticketId}/comments`, { message: comment.trim() });
+      await api.post(`/tickets/${ticketId}/comments`, { message: msg });
       qc.invalidateQueries({ queryKey: ['tickets'] });
-      setComment('');
+      setComments((c) => ({ ...c, [ticketId]: '' }));
       toast.success('Comment added ✓');
     } catch {
       toast.error('Failed to add comment.');
     } finally {
-      setSendingComment(false);
+      setSendingComment((s) => ({ ...s, [ticketId]: false }));
     }
   };
 
@@ -106,7 +107,7 @@ export default function TicketsPage() {
           {isLoading ? (
             [1,2,3].map(i => <SkeletonRow key={i} cols={3} />)
           ) : error ? (
-            <p className="px-4 py-6 text-sm text-destructive text-center">Failed to load tickets. Pull to refresh.</p>
+            <p className="px-4 py-6 text-sm text-destructive text-center">Failed to load tickets. Tap to retry.</p>
           ) : tickets.length === 0 ? (
             <p className="px-4 py-8 text-sm text-muted-foreground text-center">
               No open tickets. Things are running smoothly.
@@ -135,9 +136,9 @@ export default function TicketsPage() {
                 <div className="px-4 pb-4 space-y-3 bg-muted/30">
                   <p className="text-sm">{t.description}</p>
 
-                  {/* Status update */}
+                  {/* Status update — forward-only transitions */}
                   <div className="flex flex-wrap gap-2">
-                    {STATUSES.filter((s) => s !== t.status).map((s) => (
+                    {STATUSES.filter((s) => STATUSES.indexOf(s) > STATUSES.indexOf(t.status)).map((s) => (
                       <button
                         key={s}
                         onClick={() => updateStatus({ id: t.id, status: s })}
@@ -163,18 +164,18 @@ export default function TicketsPage() {
                   {/* Add comment */}
                   <div className="flex gap-2">
                     <input
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
+                      value={comments[t.id] ?? ''}
+                      onChange={(e) => setComments((c) => ({ ...c, [t.id]: e.target.value }))}
                       placeholder="Add a comment…"
                       className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary bg-background"
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(t.id); } }}
                     />
                     <button
                       onClick={() => addComment(t.id)}
-                      disabled={sendingComment || !comment.trim()}
+                      disabled={sendingComment[t.id] || !comments[t.id]?.trim()}
                       className="p-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50"
                     >
-                      {sendingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {sendingComment[t.id] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>

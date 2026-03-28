@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { sendPhoneOtp, confirmPhoneOtp } from '@/lib/auth';
@@ -10,24 +10,36 @@ import type { ConfirmationResult } from 'firebase/auth';
 
 type Step = 'phone' | 'otp';
 
+const OTP_LENGTH = 6;
+const RESEND_COUNTDOWN = 30;
+
 export default function LoginPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
+
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   useEffect(() => {
     if (user) router.replace('/dashboard');
   }, [user, router]);
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Resend countdown
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
+
+  const startOtpFlow = async () => {
     if (!/^[6-9]\d{9}$/.test(phone)) { setError('Enter a valid 10-digit Indian mobile number'); return; }
     setError('');
     setLoading(true);
@@ -35,6 +47,9 @@ export default function LoginPage() {
       const result = await sendPhoneOtp(`+91${phone}`, 'recaptcha-container');
       setConfirmation(result);
       setStep('otp');
+      setResendCountdown(RESEND_COUNTDOWN);
+      setOtpDigits(Array(OTP_LENGTH).fill(''));
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } catch (err: any) {
       setError(err.message || 'Failed to send OTP. Try again.');
     } finally {
@@ -42,9 +57,51 @@ export default function LoginPage() {
     }
   };
 
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await startOtpFlow();
+  };
+
+  const handleResend = async () => {
+    if (resendCountdown > 0) return;
+    setOtpDigits(Array(OTP_LENGTH).fill(''));
+    setError('');
+    await startOtpFlow();
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const next = [...otpDigits];
+    next[index] = digit;
+    setOtpDigits(next);
+    setError('');
+    if (digit && index < OTP_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+    if (!pasted) return;
+    const next = Array(OTP_LENGTH).fill('');
+    pasted.split('').forEach((ch, i) => { next[i] = ch; });
+    setOtpDigits(next);
+    setError('');
+    const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1);
+    inputRefs.current[focusIdx]?.focus();
+  };
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp.trim() || otp.length !== 6) { setError('Enter the 6-digit OTP'); return; }
+    const otp = otpDigits.join('');
+    if (otp.length !== OTP_LENGTH) { setError('Enter the 6-digit OTP'); return; }
     if (!confirmation) return;
     setError('');
     setLoading(true);
@@ -60,6 +117,8 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       setError('Incorrect OTP. Try again.');
+      setOtpDigits(Array(OTP_LENGTH).fill(''));
+      setTimeout(() => inputRefs.current[0]?.focus(), 50);
     } finally {
       setLoading(false);
     }
@@ -117,30 +176,54 @@ export default function LoginPage() {
                 Enter the 6-digit OTP sent to <strong>+91 {phone}</strong>
               </p>
             </div>
-            <div>
-              <input
-                type="text"
-                value={otp}
-                onChange={(e) => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
-                placeholder="000000"
-                className="w-full border rounded-lg px-3 py-3 text-center text-xl tracking-widest outline-none focus:ring-2 focus:ring-primary bg-background"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-              />
-              {error && <p className="text-xs text-destructive mt-1 text-center">{error}</p>}
+
+            {/* Segmented OTP boxes */}
+            <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
+              {otpDigits.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { inputRefs.current[i] = el; }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                  className="w-10 h-12 text-center text-xl font-bold border rounded-lg outline-none focus:ring-2 focus:ring-primary bg-background"
+                />
+              ))}
             </div>
+
+            {error && <p className="text-xs text-destructive mt-1 text-center">{error}</p>}
+
             <button
               type="submit"
-              disabled={loading || otp.length !== 6}
+              disabled={loading || otpDigits.join('').length !== OTP_LENGTH}
               className="w-full bg-primary text-primary-foreground rounded-lg py-3 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Verify OTP
             </button>
+
+            {/* Resend */}
+            <p className="text-center text-sm">
+              {resendCountdown > 0 ? (
+                <span className="text-muted-foreground">Resend OTP in {resendCountdown}s</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  className="text-primary font-medium underline"
+                >
+                  Resend OTP
+                </button>
+              )}
+            </p>
+
             <button
               type="button"
-              onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+              onClick={() => { setStep('phone'); setOtpDigits(Array(OTP_LENGTH).fill('')); setError(''); }}
               className="w-full text-sm text-muted-foreground underline"
             >
               Back

@@ -220,7 +220,7 @@ export default function InquiriesPage() {
                           value={inq.status}
                           onChange={(e) => updateStatus(inq.id, e.target.value)}
                           disabled={updatingId === inq.id}
-                          className="text-[10px] border rounded px-1 py-0.5 bg-background outline-none"
+                          className="text-sm border rounded px-1 py-0.5 bg-background outline-none"
                         >
                           {STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                         </select>

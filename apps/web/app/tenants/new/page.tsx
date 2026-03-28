@@ -88,7 +88,7 @@ export default function NewTenantPage() {
 
   const { mutate: submit, isPending } = useMutation({
     mutationFn: async () => {
-      await api.post('/tenants', {
+      const { data } = await api.post<{ success: boolean; data: { id: string } }>('/tenants', {
         name: form.name.trim(),
         phone: `+91${form.phone}`,
         propertyId: form.propertyId,
@@ -100,11 +100,12 @@ export default function NewTenantPage() {
         discount: Number(form.discount) || 0,
         remarks: form.remarks || undefined,
       });
+      return data.data;
     },
-    onSuccess: () => {
+    onSuccess: (newTenant) => {
       qc.invalidateQueries({ queryKey: ['tenants'] });
       toast.success('Tenant onboarded ✓');
-      router.push('/tenants');
+      router.push(newTenant?.id ? `/tenants/${newTenant.id}` : '/tenants');
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Failed to onboard tenant.');
