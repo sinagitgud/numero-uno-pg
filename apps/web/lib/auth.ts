@@ -12,13 +12,29 @@ import { api } from './api';
 import { useAuthStore } from '../store/authStore';
 import type { AuthUser } from '@numero-uno-pg/shared';
 
-// ── D15: Token auto-refresh via onIdTokenChanged (not setInterval) ───────────
-// Call this once in the root layout. Returns an unsubscribe function.
+// ── D15: Token auto-refresh + role sync via onIdTokenChanged ─────────────────
+// Fires on app open and whenever the Firebase token expires (~hourly).
+// Also re-syncs the user's role/name/isActive from the backend so that
+// server-side changes (role upgrade, approval) are reflected automatically.
 export function initTokenRefresh(): () => void {
-  return onIdTokenChanged(firebaseAuth, async (user) => {
-    if (user) {
-      const token = await user.getIdToken();
+  return onIdTokenChanged(firebaseAuth, async (firebaseUser) => {
+    if (firebaseUser) {
+      const token = await firebaseUser.getIdToken();
       useAuthStore.getState().setToken(token);
+      // Sync role from backend — handles cases where role was changed server-side
+      // (e.g. TENANT→OWNER via migration, or pending tenant got approved)
+      try {
+        const { data } = await api.post<{ success: boolean; data: AuthUser }>(
+          '/auth/register',
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (data.success && data.data) {
+          useAuthStore.getState().setAuth(data.data, token);
+        }
+      } catch {
+        // Non-fatal — keep cached role if backend is unreachable
+      }
     }
   });
 }
