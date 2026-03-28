@@ -51,7 +51,13 @@ export default function LoginPage() {
     try {
       const authUser = await confirmPhoneOtp(confirmation, otp, rememberMe);
       toast.success(`Welcome, ${authUser.name}!`);
-      router.replace('/dashboard');
+      if (authUser.isPendingApproval) {
+        router.replace('/pending');
+      } else if (authUser.role === 'TENANT') {
+        router.replace('/tenant');
+      } else {
+        router.replace('/dashboard');
+      }
     } catch (err: any) {
       setError('Incorrect OTP. Try again.');
     } finally {

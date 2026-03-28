@@ -10,6 +10,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!user) { router.replace('/login'); return; }
+    if (user.isPendingApproval) { router.replace('/pending'); return; }
     router.replace(user.role === 'TENANT' ? '/tenant' : '/dashboard');
   }, [user, router]);
 

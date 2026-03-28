@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { salesOnly } from '../middleware/rbac';
+import { createFirstInvoice } from '../lib/billing';
 
 export const inquiryRoutes = Router();
 
@@ -63,6 +64,90 @@ inquiryRoutes.post('/', authenticate, salesOnly, async (req: AuthRequest, res: R
     return res.status(201).json({ success: true, data: inquiry });
   } catch {
     return res.status(500).json({ success: false, error: 'Failed to create inquiry' });
+  }
+});
+
+// POST /api/inquiries/:id/convert — convert inquiry to tenant
+inquiryRoutes.post('/:id/convert', authenticate, salesOnly, async (req: AuthRequest, res: Response) => {
+  const schema = z.object({
+    bedId: z.string().min(1),
+    propertyId: z.string().min(1),
+    rate: z.number().positive(),
+    checkIn: z.string().min(1),
+    securityExpected: z.number().nonnegative().optional(),
+    securityReceived: z.number().nonnegative().optional(),
+    discount: z.number().min(0).max(100).optional(),
+  });
+
+  const parsed = schema.safeParse({ ...req.body, rate: Number(req.body.rate) });
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: parsed.error.errors[0].message });
+  }
+
+  try {
+    const inquiry = await prisma.inquiry.findUnique({ where: { id: req.params.id } });
+    if (!inquiry) return res.status(404).json({ success: false, error: 'Inquiry not found' });
+    if (inquiry.status === 'CONVERTED') {
+      return res.status(400).json({ success: false, error: 'Inquiry already converted' });
+    }
+
+    const { bedId, propertyId, rate, checkIn, securityExpected, securityReceived, discount } = parsed.data;
+    const joinDate = new Date(checkIn);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Resolve or create user by phone
+      let user = await tx.user.findUnique({ where: { phone: inquiry.phone } });
+      if (!user) {
+        user = await tx.user.create({
+          data: {
+            firebaseUid: inquiry.phone,
+            name: inquiry.name,
+            phone: inquiry.phone,
+            email: inquiry.email ?? undefined,
+            role: 'TENANT',
+            isActive: true,
+          },
+        });
+      } else if (!user.isActive) {
+        user = await tx.user.update({ where: { id: user.id }, data: { isActive: true } });
+      }
+
+      const tenant = await tx.tenant.create({
+        data: {
+          userId: user.id,
+          bedId,
+          propertyId,
+          rate,
+          checkIn: joinDate,
+          securityExpected: securityExpected ?? rate,
+          securityReceived: securityReceived ?? 0,
+          discount: discount ?? null,
+        },
+      });
+
+      await tx.bed.update({ where: { id: bedId }, data: { status: 'OCCUPIED' } });
+
+      await tx.inquiry.update({
+        where: { id: inquiry.id },
+        data: { status: 'CONVERTED', convertedTenantId: tenant.id },
+      });
+
+      return { tenant, userId: user.id };
+    });
+
+    // Generate first invoice outside transaction (non-critical)
+    try {
+      await createFirstInvoice(result.tenant.id, joinDate, rate);
+    } catch {
+      // Non-fatal — invoice can be created manually
+    }
+
+    return res.status(201).json({ success: true, data: { tenantId: result.tenant.id } });
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({ success: false, error: 'This tenant is already onboarded or bed is taken.' });
+    }
+    return res.status(500).json({ success: false, error: 'Conversion failed' });
   }
 });
 
