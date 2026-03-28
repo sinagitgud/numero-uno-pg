@@ -259,28 +259,78 @@ async function main() {
     },
   });
 
-  // ─── Demo accounts for Expo Go testing ────────────────────────────────────
-  // In dev mode: phone number = token (no real OTP needed)
-  // Login: enter the phone below → enter ANY 6-digit code → you're in
+  // ─── Real staff accounts ───────────────────────────────────────────────────
+  // These are pre-created so that when they log in via Firebase OTP for the
+  // first time, the backend links their Firebase UID to the correct role.
+  // The firebaseUid placeholder is replaced automatically on first login.
 
   const owner = await prisma.user.upsert({
-    where: { firebaseUid: '+911111111111' },
-    update: {},
+    where: { phone: '+919654999280' },
+    update: { role: 'OWNER', isActive: true },
     create: {
-      firebaseUid: '+911111111111',
-      name: 'Siddharth (Owner)',
-      phone: '+911111111111',
+      firebaseUid: 'seed-owner-shikha',
+      name: 'Shikha Nayyar',
+      phone: '+919654999280',
+      role: 'OWNER',
+      isActive: true,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { phone: '+919871608064' },
+    update: { role: 'OWNER', isActive: true },
+    create: {
+      firebaseUid: 'seed-owner-siddharth',
+      name: 'Siddharth Nayyar',
+      phone: '+919871608064',
       role: 'OWNER',
       isActive: true,
     },
   });
 
   const salesManager = await prisma.user.upsert({
+    where: { phone: '+918447361034' },
+    update: { role: 'SALES_MANAGER', isActive: true },
+    create: {
+      firebaseUid: 'seed-sales-priya',
+      name: 'Priya',
+      phone: '+918447361034',
+      role: 'SALES_MANAGER',
+      isActive: true,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { phone: '+919354601080' },
+    update: { role: 'OPS_MANAGER', isActive: true },
+    create: {
+      firebaseUid: 'seed-ops-girish',
+      name: 'Girish Singh',
+      phone: '+919354601080',
+      role: 'OPS_MANAGER',
+      isActive: true,
+    },
+  });
+
+  // ─── Demo accounts for dev/testing (any 6-digit OTP works in dev mode) ─────
+  await prisma.user.upsert({
+    where: { firebaseUid: '+911111111111' },
+    update: {},
+    create: {
+      firebaseUid: '+911111111111',
+      name: 'Demo Owner',
+      phone: '+911111111111',
+      role: 'OWNER',
+      isActive: true,
+    },
+  });
+
+  await prisma.user.upsert({
     where: { firebaseUid: '+912222222222' },
     update: {},
     create: {
       firebaseUid: '+912222222222',
-      name: 'Ravi (Sales Manager)',
+      name: 'Demo Sales Manager',
       phone: '+912222222222',
       role: 'SALES_MANAGER',
       isActive: true,
@@ -373,11 +423,16 @@ async function main() {
   console.log('🛏️  Beds: 66 total (15+9+14+16+6+6+1)');
   console.log('🎯 Goal config: March 2026 created');
   console.log('');
-  console.log('👤 DEMO ACCOUNTS (for Expo Go testing):');
-  console.log('   Owner:         +911111111111  →  sees all tabs + dashboard');
-  console.log('   Sales Manager: +912222222222  →  sees tenants + rent tabs');
-  console.log('   Tenant:        +913333333333  →  sees rent, tickets, info, guests, leave');
-  console.log('   (Enter any 6-digit code when asked for OTP)');
+  console.log('👤 REAL STAFF ACCOUNTS:');
+  console.log('   Shikha Nayyar:   +919654999280  →  OWNER (all tabs)');
+  console.log('   Siddharth Nayyar: +919871608064  →  OWNER (all tabs)');
+  console.log('   Priya:           +918447361034  →  SALES_MANAGER');
+  console.log('   Girish Singh:    +919354601080  →  OPS_MANAGER');
+  console.log('');
+  console.log('🧪 DEV/TEST ACCOUNTS (any 6-digit OTP):');
+  console.log('   Demo Owner:         +911111111111');
+  console.log('   Demo Sales Manager: +912222222222');
+  console.log('   Demo Tenant:        +913333333333');
 }
 
 main()
